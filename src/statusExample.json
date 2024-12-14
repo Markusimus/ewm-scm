@@ -1,0 +1,472 @@
+{
+    "status": [
+    ],
+    "workspaces": [
+        {
+            "components": [
+                {
+                    "baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "uuid": "__XsXcrmLEe-z1t4v_oi5jw"
+                    },
+                    "changesets-after-baseline": false,
+                    "changesets-after-incoming-target-baseline": true,
+                    "flow-target": {
+                        "incoming-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                        "outgoing-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "type": "STREAM",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                    },
+                    "hierarchy-is-diverged": false,
+                    "incoming-addition": false,
+                    "incoming-changes": [
+                        {
+                            "author": "",
+                            "changes": [
+                                {
+                                    "inaccessible-change": false,
+                                    "merges": [
+                                    ],
+                                    "path": "\/testDir\/README.md",
+                                    "state": {
+                                        "add": true,
+                                        "conflict": false,
+                                        "content_change": false,
+                                        "delete": false,
+                                        "move": false,
+                                        "potential_conflict": false,
+                                        "property_change": false
+                                    },
+                                    "state-id": "_xCl9VLmPEe-z1t4v_oi5jw",
+                                    "uuid": "_xCB8obmPEe-z1t4v_oi5jw"
+                                }
+                            ],
+                            "comment": "initial import",
+                            "modified": "13-Dec-2024 09:20 PM",
+                            "state": {
+                                "active": false,
+                                "complete": true,
+                                "conflict": false,
+                                "current": false,
+                                "current_merge_target": false,
+                                "has_source": false,
+                                "is_linked": false,
+                                "is_source": false,
+                                "potential_conflict": false
+                            },
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_xCLtoLmPEe-z1t4v_oi5jw"
+                        },
+                        {
+                            "author": "",
+                            "changes": [
+                                {
+                                    "inaccessible-change": false,
+                                    "merges": [
+                                    ],
+                                    "path": "\/testDir\/",
+                                    "state": {
+                                        "add": true,
+                                        "conflict": false,
+                                        "content_change": false,
+                                        "delete": false,
+                                        "move": false,
+                                        "potential_conflict": false,
+                                        "property_change": false
+                                    },
+                                    "state-id": "_noJHALmNEe-z1t4v_oi5jw",
+                                    "uuid": "_nkadkLmNEe-z1t4v_oi5jw"
+                                }
+                            ],
+                            "comment": "<No comment>",
+                            "modified": "13-Dec-2024 09:05 PM",
+                            "state": {
+                                "active": false,
+                                "complete": true,
+                                "conflict": false,
+                                "current": false,
+                                "current_merge_target": false,
+                                "has_source": false,
+                                "is_linked": false,
+                                "is_source": false,
+                                "potential_conflict": false
+                            },
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_nkq8QLmNEe-z1t4v_oi5jw"
+                        }
+                    ],
+                    "incoming-deletion": false,
+                    "incoming-hierarchy-is-diverged": true,
+                    "incoming-replacement": false,
+                    "incoming-target-baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "__XsXcrmLEe-z1t4v_oi5jw"
+                    },
+                    "is_comp_loaded": false,
+                    "name": "ScriptComponent",
+                    "outgoing-addition": false,
+                    "outgoing-changes": [
+                    ],
+                    "outgoing-deletion": false,
+                    "outgoing-replacement": false,
+                    "suspended": [
+                    ],
+                    "type": null,
+                    "uuid": "__XoGALmLEe-z1t4v_oi5jw"
+                },
+                {
+                    "changesets-after-baseline": false,
+                    "changesets-after-incoming-target-baseline": true,
+                    "direction": "incoming",
+                    "flow-target": {
+                        "incoming-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                        "outgoing-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "type": "STREAM",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                    },
+                    "hierarchy-is-diverged": false,
+                    "incoming-addition": true,
+                    "incoming-changes": [
+                    ],
+                    "incoming-deletion": false,
+                    "incoming-hierarchy-is-diverged": true,
+                    "incoming-replacement": false,
+                    "incoming-target-baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "_n_HEQ7mHEe-z1t4v_oi5jw"
+                    },
+                    "is_comp_loaded": false,
+                    "name": "VSCodeEWM (Change and Architecture Management) Default Component",
+                    "operation": "addition",
+                    "outgoing-addition": false,
+                    "outgoing-changes": [
+                    ],
+                    "outgoing-deletion": false,
+                    "outgoing-replacement": false,
+                    "suspended": [
+                    ],
+                    "type": "(incoming addition)",
+                    "uuid": "_n-jqoLmHEe-z1t4v_oi5jw"
+                }
+            ],
+            "flow-target": {
+                "incoming-flow": {
+                    "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                    "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                    "userId": "makus",
+                    "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                },
+                "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                "outgoing-flow": {
+                    "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                    "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                    "userId": "makus",
+                    "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                },
+                "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                "userId": "makus",
+                "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+            },
+            "isTracked": "true",
+            "name": "mareksWS",
+            "type": "WORKSPACE",
+            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+            "userId": "makus",
+            "uuid": "_bfx48LmLEe-z1t4v_oi5jw"
+        },
+        {
+            "components": [
+                {
+                    "baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "uuid": "__XsXcrmLEe-z1t4v_oi5jw"
+                    },
+                    "changesets-after-baseline": true,
+                    "changesets-after-incoming-target-baseline": true,
+                    "flow-target": {
+                        "incoming-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                        "outgoing-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "type": "STREAM",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                    },
+                    "hierarchy-is-diverged": true,
+                    "incoming-addition": false,
+                    "incoming-changes": [
+                        {
+                            "author": "",
+                            "changes": [
+                                {
+                                    "inaccessible-change": false,
+                                    "merges": [
+                                    ],
+                                    "path": "\/testDir\/README.md",
+                                    "state": {
+                                        "add": true,
+                                        "conflict": false,
+                                        "content_change": false,
+                                        "delete": false,
+                                        "move": false,
+                                        "potential_conflict": false,
+                                        "property_change": false
+                                    },
+                                    "state-id": "_xCl9VLmPEe-z1t4v_oi5jw",
+                                    "uuid": "_xCB8obmPEe-z1t4v_oi5jw"
+                                }
+                            ],
+                            "comment": "initial import",
+                            "modified": "13-Dec-2024 09:20 PM",
+                            "state": {
+                                "active": false,
+                                "complete": true,
+                                "conflict": false,
+                                "current": false,
+                                "current_merge_target": false,
+                                "has_source": false,
+                                "is_linked": false,
+                                "is_source": false,
+                                "potential_conflict": false
+                            },
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_xCLtoLmPEe-z1t4v_oi5jw"
+                        }
+                    ],
+                    "incoming-deletion": false,
+                    "incoming-hierarchy-is-diverged": true,
+                    "incoming-replacement": false,
+                    "incoming-target-baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "__XsXcrmLEe-z1t4v_oi5jw"
+                    },
+                    "is_comp_loaded": true,
+                    "name": "ScriptComponent",
+                    "outgoing-addition": false,
+                    "outgoing-changes": [
+                        {
+                            "author": "",
+                            "changes": [
+                                {
+                                    "inaccessible-change": false,
+                                    "merges": [
+                                    ],
+                                    "path": "\/testDir\/testfile.txt",
+                                    "state": {
+                                        "add": true,
+                                        "conflict": false,
+                                        "content_change": false,
+                                        "delete": false,
+                                        "move": false,
+                                        "potential_conflict": false,
+                                        "property_change": false
+                                    },
+                                    "state-id": "_QUehVLmPEe-z1t4v_oi5jw",
+                                    "uuid": "_CqyYgLmPEe-pX-8tye97wA"
+                                }
+                            ],
+                            "comment": "<No comment>",
+                            "modified": "13-Dec-2024 09:17 PM",
+                            "state": {
+                                "active": true,
+                                "complete": false,
+                                "conflict": false,
+                                "current": true,
+                                "current_merge_target": false,
+                                "has_source": false,
+                                "is_linked": false,
+                                "is_source": false,
+                                "potential_conflict": false
+                            },
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_QRHrULmPEe-z1t4v_oi5jw"
+                        }
+                    ],
+                    "outgoing-deletion": false,
+                    "outgoing-replacement": false,
+                    "suspended": [
+                    ],
+                    "type": null,
+                    "unresolved": [
+                        {
+                            "path": "\/ScriptComponent\/.DS_Store",
+                            "state": {
+                                "add": true,
+                                "content_change": false,
+                                "delete": false,
+                                "move": false,
+                                "property_change": false
+                            },
+                            "uuid": "_Cqv8QLmPEe-pX-8tye97wA"
+                        },
+                        {
+                            "path": "\/ScriptComponent\/testDir\/testfile2.txt",
+                            "state": {
+                                "add": true,
+                                "content_change": false,
+                                "delete": false,
+                                "move": false,
+                                "property_change": false
+                            },
+                            "uuid": "_Vorl4LmPEe-pX-8tye97wA"
+                        }
+                    ],
+                    "uuid": "__XoGALmLEe-z1t4v_oi5jw"
+                },
+                {
+                    "baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "uuid": "_n_HEQ7mHEe-z1t4v_oi5jw"
+                    },
+                    "changesets-after-baseline": false,
+                    "changesets-after-incoming-target-baseline": true,
+                    "flow-target": {
+                        "incoming-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                        "outgoing-flow": {
+                            "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                            "type": "STREAM",
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                        },
+                        "type": "STREAM",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                    },
+                    "hierarchy-is-diverged": false,
+                    "incoming-addition": false,
+                    "incoming-changes": [
+                        {
+                            "author": "",
+                            "changes": [
+                                {
+                                    "inaccessible-change": false,
+                                    "merges": [
+                                    ],
+                                    "path": "\/README.md",
+                                    "state": {
+                                        "add": true,
+                                        "conflict": false,
+                                        "content_change": false,
+                                        "delete": false,
+                                        "move": false,
+                                        "potential_conflict": false,
+                                        "property_change": false
+                                    },
+                                    "state-id": "_Sq691LmbEe-z1t4v_oi5jw",
+                                    "uuid": "_Spy8cLmbEe-z1t4v_oi5jw"
+                                }
+                            ],
+                            "comment": "<No comment>",
+                            "modified": "13-Dec-2024 10:43 PM",
+                            "state": {
+                                "active": false,
+                                "complete": true,
+                                "conflict": false,
+                                "current": false,
+                                "current_merge_target": false,
+                                "has_source": false,
+                                "is_linked": false,
+                                "is_source": false,
+                                "potential_conflict": false
+                            },
+                            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                            "uuid": "_SquwkLmbEe-z1t4v_oi5jw"
+                        }
+                    ],
+                    "incoming-deletion": false,
+                    "incoming-hierarchy-is-diverged": true,
+                    "incoming-replacement": false,
+                    "incoming-target-baseline": {
+                        "id": 1,
+                        "name": "Initial Baseline",
+                        "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                        "uuid": "_n_HEQ7mHEe-z1t4v_oi5jw"
+                    },
+                    "is_comp_loaded": true,
+                    "name": "VSCodeEWM (Change and Architecture Management) Default Component",
+                    "outgoing-addition": false,
+                    "outgoing-changes": [
+                    ],
+                    "outgoing-deletion": false,
+                    "outgoing-replacement": false,
+                    "suspended": [
+                    ],
+                    "type": null,
+                    "uuid": "_n-jqoLmHEe-z1t4v_oi5jw"
+                }
+            ],
+            "flow-target": {
+                "incoming-flow": {
+                    "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                    "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                    "userId": "makus",
+                    "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                },
+                "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                "outgoing-flow": {
+                    "name": "VSCodeEWM (Change and Architecture Management) Stream",
+                    "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                    "userId": "makus",
+                    "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+                },
+                "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+                "userId": "makus",
+                "uuid": "_n5-FkLmHEe-z1t4v_oi5jw"
+            },
+            "isTracked": "true",
+            "name": "VSCodeWork",
+            "type": "WORKSPACE",
+            "url": "https:\/\/jazz.net\/sandbox01-ccm\/",
+            "userId": "makus",
+            "uuid": "_-cu5ILmNEe-z1t4v_oi5jw"
+        }
+    ]
+}

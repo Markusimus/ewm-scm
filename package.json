@@ -16,6 +16,10 @@
       {
         "command": "ewm-scm.ewmInit",
         "title": "EWM Init"
+      },
+      {
+        "command": "ewm-scm.ewmUpdate",
+        "title": "EWM Update"
       }
     ]
   },
