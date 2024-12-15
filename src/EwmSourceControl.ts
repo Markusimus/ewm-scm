@@ -15,16 +15,19 @@ export class EwmSourceControl implements vscode.Disposable {
 	private outgoingResources: vscode.SourceControlResourceGroup;
 	private unresolvedResources: vscode.SourceControlResourceGroup;
 	private componentStatus: ComponentI;
+	private componentName : string;
 
     private timeout?: NodeJS.Timeout;
 
-    constructor(context: vscode.ExtensionContext, private readonly component: ComponentI, private readonly workspaceFolder: vscode.WorkspaceFolder ) {
+    constructor(context: vscode.ExtensionContext, readonly component: ComponentI, private readonly workspaceFolder: vscode.WorkspaceFolder ) {
 		this.componentStatus = component;
 		this.jsEwmScm = vscode.scm.createSourceControl('ewm', component.name, workspaceFolder.uri);
 
         this.incommingResources = this.jsEwmScm.createResourceGroup("incoming", "incoming-changes");
 		this.outgoingResources = this.jsEwmScm.createResourceGroup("outgoing", "outgoing-changes");
 		this.unresolvedResources = this.jsEwmScm.createResourceGroup("unresolved", "unresolved-changes");
+
+		this.componentName = component.name;
     
         // const fileSystemWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceFolder, "*.*"));
 		// fileSystemWatcher.onDidChange(uri => this.onResourceChange(uri), context.subscriptions);
@@ -112,14 +115,19 @@ export class EwmSourceControl implements vscode.Disposable {
 	// 	this.timeout = setTimeout(() => this.tryUpdateChangedGroup(), 500);
 	// }
 
-    async tryUpdateChangedGroup( component: ComponentI ): Promise<void> {
-		try {
-			this.componentStatus = component;
-			await this.updateResourceGroups();
+    public tryUpdateChangedGroup( statusData: StatusDataI ) {
+		const emptyStatus : ComponentI = {} as ComponentI;
+		this.componentStatus = emptyStatus;
+		// Find Component in statusData
+		for (var component of statusData.workspaces[0].components)
+		{
+			if (component.name && component.name === this.componentName)
+			{
+				this.componentStatus = component;
+				break;
+			}
 		}
-		catch (ex) {
-			vscode.window.showErrorMessage((<Error>ex).message);
-		}
+		this.updateResourceGroups();
 	}
 
     /** This is where the source control determines, which documents were updated, removed, and theoretically added. */

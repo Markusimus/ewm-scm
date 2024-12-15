@@ -20,28 +20,17 @@ export function activate(context: vscode.ExtensionContext) {
     	outputChannel.show();
   	}
 
-	const ewm = new Ewm(context, outputChannel);
 
 	const rootPath =
 	vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
 		? vscode.workspace.workspaceFolders[0].uri
 		: undefined;
 
+	const ewm = new Ewm(context, outputChannel);
+
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	outputChannel.append('Congratulations, your extension "ewm-scm" is now active!\n');
-	// console.log('Congratulations, your extension "ewm-scm" is now active!');
-
-	// let disposable1 = vscode.commands.registerCommand('ewm-scm.ewmInit1', async () => {
-	// 	if (rootPath) {
-	// 		const filePathUri = vscode.Uri.joinPath(rootPath, 'statusExample.json');
-	// 		const status = await ewm.getStatus(filePathUri);
-	// 	} else {
-	// 		vscode.window.showWarningMessage('No workspace open');
-	// 	}
-    // });
-  
-	// context.subscriptions.push(disposable1);
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
@@ -49,8 +38,13 @@ export function activate(context: vscode.ExtensionContext) {
 	const disposable = vscode.commands.registerCommand('ewm-scm.ewmInit', async () => {
 		// The code you place here will be executed every time your command is executed
 		
+		// let sandBoxJason = await ewm.getSandbox();
+
+		// Check if rootPath is in the sandBox directory.
+		// if (rootPath && sandBoxJason && vscode.Uri.file(sandBoxJason.sandbox).toString().includes(rootPath.toString())) {
+
 		if (rootPath) {
-			const filePathUri = vscode.Uri.joinPath(rootPath, 'statusExample.json');
+			// const filePathUri = vscode.Uri.joinPath(rootPath, 'statusExample.json');
 			const status = await ewm.getStatus(rootPath);
 
 			
@@ -76,9 +70,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const disposableUpdate = vscode.commands.registerCommand('ewm-scm.ewmUpdate', async () => {
 		if (rootPath) {
 			const status = await ewm.getStatus(rootPath);
-			// for (const ewmSourceControl of ewmSourceControls) {
-			// 	ewmSourceControl.tryUpdateChangedGroup(status);
-			// }
+			if (status) {
+				for (const ewmSourceControl of ewmSourceControls) {
+					ewmSourceControl.tryUpdateChangedGroup(status);
+				}
+			}
 		} else {
 			vscode.window.showWarningMessage('No workspace open');
 		}

@@ -1,6 +1,7 @@
 
 import * as vscode from 'vscode';
 import StatusDataI from './ewmStatusInterface';
+import {EwmSandboxI} from './ewmSandboxInterface';
 import { exec } from 'child_process';
 
 export class Ewm {
@@ -8,6 +9,7 @@ export class Ewm {
     private ewmPath: string = "pathtoewm";
     private outputChannel: vscode.OutputChannel;
     private rootPath: vscode.Uri | undefined;
+    private sandBoxPath: vscode.Uri | undefined;
 
     constructor( private context: vscode.ExtensionContext, private _outputChannel: vscode.OutputChannel) {
         this.outputChannel = _outputChannel;
@@ -16,25 +18,16 @@ export class Ewm {
         vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
             ? vscode.workspace.workspaceFolders[0].uri
             : undefined;
+
     };
+
+    
 
     public async execLscm(command: String) : Promise<String> {
         
         // let returnVal = "";
-        let commandToExecute = `lscm ${command} -d ${this.rootPath?.path}`;
+        let commandToExecute = `lscm ${command} -d ${this.rootPath?.fsPath}`;
         this.outputChannel.appendLine(commandToExecute);
-
-        // exec(commandToExecute, (error, stdout, stderr) => {
-        //     if (error) {
-        //         vscode.window.showErrorMessage(`Error running command: ${error.message}`);
-        //         return;
-        //     }
-        //     if(stderr){
-        //         vscode.window.showErrorMessage(`Error output: ${stderr}`);
-        //     }
-        //     returnVal = stdout;
-        //     //  vscode.window.showInformationMessage(`Command Output: ${stdout}`);
-        // });
 
         // return returnVal;
         //We have to return an object with type of promise in order to use await inside of the function.
@@ -56,11 +49,19 @@ export class Ewm {
         });
     };
 
+    public async getSandbox() : Promise<EwmSandboxI | null> {
+
+        const commandRes = await this.execLscm("show sandbox-structure -j");
+        const jsonSandbox : EwmSandboxI = JSON.parse(commandRes.toString());
+        this.sandBoxPath = vscode.Uri.file(jsonSandbox.sandbox);
+        return jsonSandbox;
+    }
+
     public async getStatus(filePathUri : vscode.Uri) : Promise<StatusDataI | null> {
         let retStatus = null;
         try {
             // const fileContent = await vscode.workspace.fs.readFile(filePathUri);
-            const commandRes = await this.execLscm('show status -j');
+            const commandRes = await this.execLscm(`show status -j`);
             this.outputChannel.appendLine(commandRes.toString());
             const jsonStatus : StatusDataI = JSON.parse(commandRes.toString());
 
