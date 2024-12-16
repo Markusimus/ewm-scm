@@ -45,7 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		if (rootPath) {
 			// const filePathUri = vscode.Uri.joinPath(rootPath, 'statusExample.json');
-			const status = await ewm.getStatus(rootPath);
+			const status = await ewm.getStatus();
 
 			
 			if (status) {
@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const disposableUpdate = vscode.commands.registerCommand('ewm-scm.ewmUpdate', async () => {
 		if (rootPath) {
-			const status = await ewm.getStatus(rootPath);
+			const status = await ewm.getStatus();
 			if (status) {
 				for (const ewmSourceControl of ewmSourceControls) {
 					ewmSourceControl.tryUpdateChangedGroup(status);

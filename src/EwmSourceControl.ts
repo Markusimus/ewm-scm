@@ -16,18 +16,24 @@ export class EwmSourceControl implements vscode.Disposable {
 	private unresolvedResources: vscode.SourceControlResourceGroup;
 	private componentStatus: ComponentI;
 	private componentName : string;
+	private rootPath: vscode.Uri;
 
     private timeout?: NodeJS.Timeout;
 
-    constructor(context: vscode.ExtensionContext, readonly component: ComponentI, private readonly workspaceFolder: vscode.WorkspaceFolder ) {
+    constructor(context: vscode.ExtensionContext, readonly component: ComponentI, readonly workspaceFolder: vscode.WorkspaceFolder ) {
 		this.componentStatus = component;
-		this.jsEwmScm = vscode.scm.createSourceControl('ewm', component.name, workspaceFolder.uri);
+		this.rootPath = vscode.Uri.joinPath(workspaceFolder.uri, component.name);
+
+
+		this.jsEwmScm = vscode.scm.createSourceControl('ewm', component.name, this.rootPath);
 
         this.incommingResources = this.jsEwmScm.createResourceGroup("incoming", "incoming-changes");
 		this.outgoingResources = this.jsEwmScm.createResourceGroup("outgoing", "outgoing-changes");
 		this.unresolvedResources = this.jsEwmScm.createResourceGroup("unresolved", "unresolved-changes");
 
 		this.componentName = component.name;
+
+
     
         // const fileSystemWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceFolder, "*.*"));
 		// fileSystemWatcher.onDidChange(uri => this.onResourceChange(uri), context.subscriptions);
@@ -82,6 +88,8 @@ export class EwmSourceControl implements vscode.Disposable {
 		// const repositoryUri = this.fiddleRepository.provideOriginalResource(docUri, null);
 		// const fiddlePart = toExtension(docUri).toUpperCase();
 
+		let docUri = vscode.Uri.joinPath(this.rootPath, change.path);
+
 		// const command: vscode.Command = !deleted
 		// 	? {
 		// 		title: "Show changes",
@@ -91,17 +99,28 @@ export class EwmSourceControl implements vscode.Disposable {
 		// 	}
 		// 	: null;
 
+		let command : vscode.Command | undefined;
+		if (change.state.content_change)
+		{
+			command = {
+				title: "Show changes",
+				command: "vscode.diff",
+				// arguments: ["TBD"],
+				arguments: [docUri, docUri, `EWM#${docUri} ${docUri} ↔ Local changes`],
+				tooltip: "Diff your changes"
+			};
+		}
         // const command: vscode.Command = {
         //     title: "Show change",
         //     command: "vscode.diff",
         //     // arguments: ["TBD"],
         //     tooltip: "Diff your changes"
         // };
-		let docUri = vscode.Uri.file(change.path);
+		
         
 		const resourceState: vscode.SourceControlResourceState = {
 			resourceUri: docUri,
-			// command: command,
+			command: command
 			// decorations: {
 			// 	tooltip: 'File was changed.'
 			// }

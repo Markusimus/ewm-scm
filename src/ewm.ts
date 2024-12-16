@@ -57,12 +57,12 @@ export class Ewm {
         return jsonSandbox;
     }
 
-    public async getStatus(filePathUri : vscode.Uri) : Promise<StatusDataI | null> {
+    public async getStatus() : Promise<StatusDataI | null> {
         let retStatus = null;
         try {
             // const fileContent = await vscode.workspace.fs.readFile(filePathUri);
             const commandRes = await this.execLscm(`show status -j`);
-            this.outputChannel.appendLine(commandRes.toString());
+            // this.outputChannel.appendLine(commandRes.toString());
             const jsonStatus : StatusDataI = JSON.parse(commandRes.toString());
 
             // const jsonStatus : StatusDataI = JSON.parse(fileContent.toString());
