@@ -1,24 +1,12 @@
-
 import * as vscode from 'vscode';
 import StatusDataI from './ewmStatusInterface';
 import {EwmSandboxI} from './ewmSandboxInterface';
-import { exec } from 'child_process';
+import { exec, ExecOptions } from 'child_process';
 
 export class Ewm {
     public version: string = "0";
-    private ewmPath: string = "pathtoewm";
-    private outputChannel: vscode.OutputChannel;
-    private rootPath: vscode.Uri | undefined;
-    private sandBoxPath: vscode.Uri | undefined;
 
-    constructor( private context: vscode.ExtensionContext, private _outputChannel: vscode.OutputChannel) {
-        this.outputChannel = _outputChannel;
-
-        this.rootPath =
-        vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
-            ? vscode.workspace.workspaceFolders[0].uri
-            : undefined;
-
+    constructor( private rootPath: vscode.Uri, private outputChannel: vscode.OutputChannel) {
     };
 
     
@@ -26,14 +14,15 @@ export class Ewm {
     public async execLscm(command: String) : Promise<String> {
         
         // let returnVal = "";
-        let commandToExecute = `lscm ${command} -d ${this.rootPath?.fsPath}`;
+        let commandToExecute = `lscm ${command}`;
         this.outputChannel.appendLine(commandToExecute);
+        const exOptions : ExecOptions = {cwd:this.rootPath?.fsPath};
 
         // return returnVal;
         //We have to return an object with type of promise in order to use await inside of the function.
         //So we can wrap the "exec" into a new prmises so that we can wait for the value to be there before the function ends.
         return new Promise<string>((resolve, reject) => {
-            exec(commandToExecute, (error, stdout, stderr) => {
+            exec(commandToExecute, exOptions ,(error, stdout, stderr) => {
                 if (error) {
                     vscode.window.showErrorMessage(`Error running command: ${error.message}`);
                     reject(error);
@@ -49,12 +38,18 @@ export class Ewm {
         });
     };
 
-    public async getSandbox() : Promise<EwmSandboxI | null> {
+    // public async getSandbox() : Promise<EwmSandboxI | null> {
 
-        const commandRes = await this.execLscm("show sandbox-structure -j");
-        const jsonSandbox : EwmSandboxI = JSON.parse(commandRes.toString());
-        this.sandBoxPath = vscode.Uri.file(jsonSandbox.sandbox);
-        return jsonSandbox;
+    //     const commandRes = await this.execLscm("show sandbox-structure -j");
+    //     const jsonSandbox : EwmSandboxI = JSON.parse(commandRes.toString());
+    //     this.sandBoxPath = vscode.Uri.file(jsonSandbox.sandbox);
+    //     return jsonSandbox;
+    // }
+
+    public async getFile(sourceFile: string, component: string, workspace: string, outUri: vscode.Uri): Promise<void> {
+        // lscm get file -w VSCodeWork -c ScriptComponent -f /testDir/testfile.txt ../../../testfileLoad1.txt
+        let fullCommand = `get file -w "${workspace}" -c "${component}" -f "${sourceFile}" ${outUri.fsPath}`;
+        await this.execLscm(fullCommand);
     }
 
     public async getStatus() : Promise<StatusDataI | null> {
