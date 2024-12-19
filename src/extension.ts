@@ -1,8 +1,11 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { EwmSourceControl } from './EwmSourceControl';
+import { EwmSourceControl, EwmDocumentContentProvider, EWM_SCHEME } from './EwmSourceControl';
 import { Ewm } from './ewm';
+
+
+let ewmDocumentContentProvider: EwmDocumentContentProvider;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -13,6 +16,8 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.commands.registerCommand("ewm-scm.showOutput", () => outputChannel.show());
 	context.subscriptions.push(outputChannel);
 	let ewmSourceControls: EwmSourceControl[] = [];
+
+	
 
   	const showOutput = true; // configuration.get<boolean>("showOutput");
 
@@ -26,7 +31,6 @@ export function activate(context: vscode.ExtensionContext) {
 		? vscode.workspace.workspaceFolders[0].uri
 		: undefined;
 
-	const ewm = new Ewm(context, outputChannel);
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
@@ -44,16 +48,24 @@ export function activate(context: vscode.ExtensionContext) {
 		// if (rootPath && sandBoxJason && vscode.Uri.file(sandBoxJason.sandbox).toString().includes(rootPath.toString())) {
 
 		if (rootPath) {
+			const ewm = new Ewm(rootPath, outputChannel);
+
 			// const filePathUri = vscode.Uri.joinPath(rootPath, 'statusExample.json');
 			const status = await ewm.getStatus();
 
 			
 			if (status) {
 				const activeWorkspaceFolder = vscode.workspace.getWorkspaceFolder(rootPath);
+
+				
 				if (activeWorkspaceFolder)
 				{
+					const workspaceName = status.workspaces[0].name;
+					ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, workspaceName);
+					context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EWM_SCHEME, ewmDocumentContentProvider));
+
 					for(const component of status.workspaces[0].components) {
-						ewmSourceControls.push(new EwmSourceControl(context, component, activeWorkspaceFolder));
+						ewmSourceControls.push(new EwmSourceControl(context, component, workspaceName, activeWorkspaceFolder, outputChannel));
 					}
 				}
 			}
@@ -69,6 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const disposableUpdate = vscode.commands.registerCommand('ewm-scm.ewmUpdate', async () => {
 		if (rootPath) {
+			const ewm = new Ewm(rootPath, outputChannel);
 			const status = await ewm.getStatus();
 			if (status) {
 				for (const ewmSourceControl of ewmSourceControls) {
