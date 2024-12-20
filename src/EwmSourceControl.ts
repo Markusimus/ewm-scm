@@ -190,7 +190,7 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
  */
 export class EwmDocumentContentProvider implements vscode.TextDocumentContentProvider, vscode.Disposable {
 	private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
-	private loadedFiles = new Map<string, vscode.Uri>(); // this assumes each fiddle is only open once per workspace
+	private loadedFiles = new Map<string, string>(); // this assumes each fiddle is only open once per workspace
 
 	constructor(private ewm: Ewm, private workspaceName: string, private activeWorkspaceFolder: vscode.Uri) { }
 
@@ -201,15 +201,6 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 	dispose(): void {
 		this._onDidChange.dispose();
 	}
-
-	// updated(newFiddle: Fiddle): void {
-	// 	this.fiddles.set(newFiddle.slug, newFiddle);
-
-	// 	// let's assume all 3 documents actually changed and notify the quick-diff
-	// 	this._onDidChange.fire(Uri.parse(`${JSFIDDLE_SCHEME}:${newFiddle.slug}.html`));
-	// 	this._onDidChange.fire(Uri.parse(`${JSFIDDLE_SCHEME}:${newFiddle.slug}.css`));
-	// 	this._onDidChange.fire(Uri.parse(`${JSFIDDLE_SCHEME}:${newFiddle.slug}.js`));
-	// }
 
 	provideTextDocumentContent(uri: vscode.Uri, token: vscode.CancellationToken): vscode.ProviderResult<string> {
 		if (token.isCancellationRequested) { return "Canceled"; }
@@ -226,40 +217,42 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 
 		// Check if uri is already present in the loadedFiles.
 		// If so then return the tempUri.If not then get file from ewm and store it in system tempdir.
-		const tempUri = this.loadedFiles.get(relativeUri);
-		if (tempUri) {
-			console.log(`provideTextDocumentContent using the already loaded file: ${tempUri.path}`);
-			var s = fs.readFileSync(tempUri.fsPath).toString();
-			return s;
+		const documentContent = this.loadedFiles.get(relativeUri);
+		if (documentContent) {
+			console.log(`provideTextDocumentContent using the already loaded file: ${relativeUri}`);
+			return documentContent;
 		}
 
 		// Remove first folder from the docUri path.
 		const docUri = '/' + relativeUri.substring(relativeUri.indexOf('/', 1) + 1);
-		// get first folder from uri. This is the componentName.
-		const componentName = relativeUri.substr(1, relativeUri.indexOf('/', 1) - 1);
+		// Get first folder name from the relativeUri path.
+		const componentName = relativeUri.split('/')[1];
 
 		// Get Temporary directory of the operating system.
 		const systemTempDir = vscode.Uri.file(os.tmpdir());
 		const tempFileName = crypto.randomBytes(16).toString("hex");
 		const tempFileUri = vscode.Uri.joinPath(systemTempDir, tempFileName);
-		console.log(`provideOriginalResource uri: ${relativeUri}  tempFileUri: ${tempFileUri.path} docUri: ${docUri}`);
+		console.log(`doc uri: ${docUri}  componentName: ${componentName} workspaceName: ${this.workspaceName}`);
 		this.ewm.getFile(docUri, componentName, this.workspaceName, tempFileUri).then(() => {
             // Code to execute after the file is downloaded
             console.log(`File ${docUri} has been downloaded to ${tempFileUri.path}`);
+			// Check if file exist or not.
+			if (!fs.existsSync(tempFileUri.fsPath)) {
+				return "Resource not found: " + tempFileUri.toString();
+			}
+
+			// Open and read content of the file
+			const fileContent = fs.readFileSync(tempFileUri.fsPath, 'utf-8');
+			this.loadedFiles.set(relativeUri, fileContent);
+			// Remove the temp file after reading the content.
+			fs.unlinkSync(tempFileUri.fsPath);
+
 			this._onDidChange.fire(uri);
         }).catch((error) => {
             // Handle any errors that occur during the execution
             console.error(`Failed to download file ${docUri}:`, error);
         });
 
-		this.loadedFiles.set(relativeUri, tempFileUri);
-		// Check if file exist or not.
-		if (!fs.existsSync(tempFileUri.fsPath)) {
-			return "Resource not found: " + tempFileUri.toString();
-		}
-
-		// Open and read content of the file
-		const fileContent = fs.readFileSync(tempFileUri.fsPath, 'utf-8');
-		return fileContent;
+		return "Downloading file...";
 	}
 }
