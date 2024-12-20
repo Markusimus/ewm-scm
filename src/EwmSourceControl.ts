@@ -51,6 +51,7 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
         // context.subscriptions.push(fileSystemWatcher);
 
 		this.updateResourceGroups();
+		this.jsEwmScm.quickDiffProvider = this;
     }
 
 	public updateResourceGroups(): void {
@@ -191,7 +192,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 	private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
 	private loadedFiles = new Map<string, vscode.Uri>(); // this assumes each fiddle is only open once per workspace
 
-	constructor(private ewm: Ewm, private workspaceName: string) { }
+	constructor(private ewm: Ewm, private workspaceName: string, private activeWorkspaceFolder: vscode.Uri) { }
 
 	get onDidChange(): vscode.Event<vscode.Uri> {
 		return this._onDidChange.event;
@@ -213,9 +214,19 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 	provideTextDocumentContent(uri: vscode.Uri, token: vscode.CancellationToken): vscode.ProviderResult<string> {
 		if (token.isCancellationRequested) { return "Canceled"; }
 
+		let relativeUri = uri.fsPath;
+		// Check if string starts with activeWorkspaceFolder.
+		if (relativeUri.startsWith(this.activeWorkspaceFolder.fsPath)) {
+			// Remove activeWorkspaceFolder name from uri.
+			relativeUri = '/' + relativeUri.substring(this.activeWorkspaceFolder.fsPath.length + 1);
+
+		}
+
+		console.log(`provideTextDocumentContent uri: ${uri.path}  relativeUri: ${relativeUri}  activeWorkspaceFolder: ${this.activeWorkspaceFolder.fsPath}`);
+
 		// Check if uri is already present in the loadedFiles.
 		// If so then return the tempUri.If not then get file from ewm and store it in system tempdir.
-		const tempUri = this.loadedFiles.get(uri.fsPath);
+		const tempUri = this.loadedFiles.get(relativeUri);
 		if (tempUri) {
 			console.log(`provideTextDocumentContent using the already loaded file: ${tempUri.path}`);
 			var s = fs.readFileSync(tempUri.fsPath).toString();
@@ -223,15 +234,15 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		}
 
 		// Remove first folder from the docUri path.
-		const docUri = '/' + uri.path.substring(uri.path.indexOf('/', 1) + 1);
+		const docUri = '/' + relativeUri.substring(relativeUri.indexOf('/', 1) + 1);
 		// get first folder from uri. This is the componentName.
-		const componentName = uri.path.substr(1, uri.path.indexOf('/', 1) - 1);
+		const componentName = relativeUri.substr(1, relativeUri.indexOf('/', 1) - 1);
 
 		// Get Temporary directory of the operating system.
 		const systemTempDir = vscode.Uri.file(os.tmpdir());
 		const tempFileName = crypto.randomBytes(16).toString("hex");
 		const tempFileUri = vscode.Uri.joinPath(systemTempDir, tempFileName);
-		console.log(`provideOriginalResource uri: ${uri.path}  tempFileUri: ${tempFileUri.path} docUri: ${docUri}`);
+		console.log(`provideOriginalResource uri: ${relativeUri}  tempFileUri: ${tempFileUri.path} docUri: ${docUri}`);
 		this.ewm.getFile(docUri, componentName, this.workspaceName, tempFileUri).then(() => {
             // Code to execute after the file is downloaded
             console.log(`File ${docUri} has been downloaded to ${tempFileUri.path}`);
@@ -241,7 +252,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
             console.error(`Failed to download file ${docUri}:`, error);
         });
 
-		this.loadedFiles.set(uri.fsPath, tempFileUri);
+		this.loadedFiles.set(relativeUri, tempFileUri);
 		// Check if file exist or not.
 		if (!fs.existsSync(tempFileUri.fsPath)) {
 			return "Resource not found: " + tempFileUri.toString();

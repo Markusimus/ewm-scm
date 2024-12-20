@@ -31,22 +31,10 @@ export function activate(context: vscode.ExtensionContext) {
 		? vscode.workspace.workspaceFolders[0].uri
 		: undefined;
 
-
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
 	outputChannel.append('Congratulations, your extension "ewm-scm" is now active!\n');
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
 	const disposable = vscode.commands.registerCommand('ewm-scm.ewmInit', async () => {
 		// The code you place here will be executed every time your command is executed
-		
-		// let sandBoxJason = await ewm.getSandbox();
-
-		// Check if rootPath is in the sandBox directory.
-		// if (rootPath && sandBoxJason && vscode.Uri.file(sandBoxJason.sandbox).toString().includes(rootPath.toString())) {
-
 		if (rootPath) {
 			const ewm = new Ewm(rootPath, outputChannel);
 
@@ -61,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
 				if (activeWorkspaceFolder)
 				{
 					const workspaceName = status.workspaces[0].name;
-					ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, workspaceName);
+					ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, workspaceName, activeWorkspaceFolder.uri);
 					context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EWM_SCHEME, ewmDocumentContentProvider));
 
 					for(const component of status.workspaces[0].components) {

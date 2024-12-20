@@ -11,16 +11,19 @@ export class Ewm {
 
     
 
-    public async execLscm(command: String) : Promise<String> {
-        
-        // let returnVal = "";
+    /**
+     * Executes an lscm command in the context of the current workspace.
+     *
+     * @param command - The lscm command to execute.
+     * @returns A promise that resolves with the standard output of the command, or rejects with an error.
+     *
+     * @throws Will show an error message and reject the promise if the command execution fails or if there is any error output.
+     */
+    public async execLscm(command: string) : Promise<string> {
         let commandToExecute = `lscm ${command}`;
         this.outputChannel.appendLine(commandToExecute);
-        const exOptions : ExecOptions = {cwd:this.rootPath?.fsPath};
+        const exOptions : ExecOptions = {cwd:this.rootPath.fsPath};
 
-        // return returnVal;
-        //We have to return an object with type of promise in order to use await inside of the function.
-        //So we can wrap the "exec" into a new prmises so that we can wait for the value to be there before the function ends.
         return new Promise<string>((resolve, reject) => {
             exec(commandToExecute, exOptions ,(error, stdout, stderr) => {
                 if (error) {
@@ -28,15 +31,15 @@ export class Ewm {
                     reject(error);
                     return;
                 }
-                if(stderr){
+                if (stderr) {
                     vscode.window.showErrorMessage(`Error output: ${stderr}`);
-                    reject(stderr);
+                    reject(new Error(stderr));
                     return;
                 }
                 resolve(stdout);
             });        
         });
-    };
+    }
 
     // public async getSandbox() : Promise<EwmSandboxI | null> {
 
