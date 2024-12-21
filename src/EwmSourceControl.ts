@@ -94,13 +94,16 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 	provideOriginalResource(uri: vscode.Uri, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.Uri> {
 		// converts the local file uri to jsfiddle:file.ext
 		// const relativePath = workspace.asRelativePath(uri.fsPath);
-		return vscode.Uri.parse(`${EWM_SCHEME}:${uri.fsPath}`);
+		// // uri.scheme = EWM_SCHEME;
+		// let ewmUri = new vscode.Uri(EWM_SCHEME, '', uri.path)
+		// return uri;
+		return vscode.Uri.parse(`${EWM_SCHEME}:${uri.path}`);
 	}
 
     toSourceControlResourceState(change: ChangeI | UnresolvedChangeI ): vscode.SourceControlResourceState {
 
-		const changePath = vscode.Uri.parse(change.path);
-		const docUri = vscode.Uri.joinPath(this.workspaceFolder.uri, change.path);
+		const changePath = vscode.Uri.file(change.path);
+		const docUri = vscode.Uri.joinPath(this.workspaceFolder.uri, changePath.fsPath);
 		const cancelToken = new vscode.CancellationTokenSource();
 		// const fiddlePart = toExtension(docUri).toUpperCase();
 
@@ -113,24 +116,17 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 			command = {
 				title: "Show changes",
 				command: "vscode.diff",
-				arguments: [repositoryUri, docUri, `EWM#${docUri.path} ${docUri.path} ↔ Local changes`],
+				arguments: [repositoryUri, docUri, `EWM#${docUri.path}`],
 				tooltip: "Diff your changes"
 			};
 		}
-        // const command: vscode.Command = {
-        //     title: "Show change",
-        //     command: "vscode.diff",
-        //     // arguments: ["TBD"],
-        //     tooltip: "Diff your changes"
-        // };
-		
-        
+	        
 		const resourceState: vscode.SourceControlResourceState = {
 			resourceUri: docUri,
-			command: command
-			// decorations: {
-			// 	tooltip: 'File was changed.'
-			// }
+			command: command,
+			decorations: {
+				tooltip: 'File was changed.'
+			}
 		};
 
 		return resourceState;
@@ -223,7 +219,13 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		// Check if string starts with activeWorkspaceFolder.
 		if (relativeUri.startsWith(this.activeWorkspaceFolder.path)) {
 			// Remove activeWorkspaceFolder name from uri.
-			relativeUri = '/' + relativeUri.substring(this.activeWorkspaceFolder.path.length + 1);
+			relativeUri = relativeUri.substring(this.activeWorkspaceFolder.path.length);
+		}
+
+		// Check if starting with workspace name
+		if (relativeUri.startsWith( '/' + this.workspaceName ))
+		{
+			relativeUri = relativeUri.substring(this.workspaceName.length + 1 );
 		}
 
 		console.log(`provideTextDocumentContent uri: ${uri.path}  relativeUri: ${relativeUri}  activeWorkspaceFolder: ${this.activeWorkspaceFolder.path}`);
@@ -237,7 +239,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		}
 
 		// Remove first folder from the docUri path.
-		const docUri = '/' + relativeUri.substring(relativeUri.indexOf('/', 1) + 1);
+		const docUri = relativeUri.substring( relativeUri.indexOf('/', 1) );
 		// Get first folder name from the relativeUri path.
 		const componentName = relativeUri.split('/')[1];
 
