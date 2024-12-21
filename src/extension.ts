@@ -37,23 +37,20 @@ export function activate(context: vscode.ExtensionContext) {
 		// The code you place here will be executed every time your command is executed
 		if (rootPath) {
 			const ewm = new Ewm(rootPath, outputChannel);
+			const sandbox = await ewm.getSandbox();
 
-			// const filePathUri = vscode.Uri.joinPath(rootPath, 'statusExample.json');
-			const status = await ewm.getStatus();
-
-			
-			if (status) {
+			// Go through the sandbox and init components.
+			if (sandbox) {
 				const activeWorkspaceFolder = vscode.workspace.getWorkspaceFolder(rootPath);
-
-				
 				if (activeWorkspaceFolder)
 				{
-					const workspaceName = status.workspaces[0].name;
-					ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, workspaceName, activeWorkspaceFolder.uri);
+					ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, sandbox.shares[0].remote.workspace.name, activeWorkspaceFolder.uri);
 					context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EWM_SCHEME, ewmDocumentContentProvider));
 
-					for(const component of status.workspaces[0].components) {
-						ewmSourceControls.push(new EwmSourceControl(context, component, workspaceName, activeWorkspaceFolder, outputChannel));
+					for (const sandboxShare of sandbox.shares) {
+						const ewmSourceControl = new EwmSourceControl(context, sandboxShare, outputChannel);
+						await ewmSourceControl.updateResourceGroups();
+						ewmSourceControls.push(ewmSourceControl);
 					}
 				}
 			}
@@ -69,12 +66,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const disposableUpdate = vscode.commands.registerCommand('ewm-scm.ewmUpdate', async () => {
 		if (rootPath) {
-			const ewm = new Ewm(rootPath, outputChannel);
-			const status = await ewm.getStatus();
-			if (status) {
-				for (const ewmSourceControl of ewmSourceControls) {
-					ewmSourceControl.tryUpdateChangedGroup(status);
-				}
+			for (const ewmSourceControl of ewmSourceControls) {
+				await ewmSourceControl.updateResourceGroups();
 			}
 		} else {
 			vscode.window.showWarningMessage('No workspace open');

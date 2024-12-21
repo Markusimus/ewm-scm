@@ -7,7 +7,7 @@ export interface EwmSandboxI {
     /**
      * An array of share configurations, each mapping a local directory to a remote EWM component.
      */
-    shares: EwmShare[];
+    shares: EwmShareI[];
   
     /**
      * An array for status data about the sandbox
@@ -15,7 +15,7 @@ export interface EwmSandboxI {
     status: any[];
   }
   
-  interface EwmShare {
+ export interface EwmShareI {
     /**
      * The local file system path for this share.
      */

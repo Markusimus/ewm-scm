@@ -3,44 +3,43 @@ import * as crypto from 'crypto'; // Import the Node.js crypto module
 import * as fs from 'fs';
 import {statusOut} from './status';
 import { StatusDataI, ComponentI, ChangesetI, ChangeI, UnresolvedChangeI}  from './ewmStatusInterface';
+import { EwmShareI } from './ewmSandboxInterface';
 import { Ewm } from './ewm';
 import os from 'os';
 
 export const CONFIGURATION_FILE = '.jsewm';
-
 export const EWM_SCHEME = 'ewm';
 
-// function createResourceUri(relativePath: string): vscode.Uri {
-//     // const absolutePath = path.join(vscode.workspace.rootPath, relativePath);
-//     return vscode.Uri.file(relativePath);
-//   }
 
 export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProvider {
 	private jsEwmScm: vscode.SourceControl;
     private incommingResources: vscode.SourceControlResourceGroup;
 	private outgoingResources: vscode.SourceControlResourceGroup;
 	private unresolvedResources: vscode.SourceControlResourceGroup;
-	private componentStatus: ComponentI;
 	private componentName : string;
-	private rootPath: vscode.Uri;
+	private workspaceName: string;
+	private componentRootUri: vscode.Uri;
 	private ewm : Ewm;
 	// private rootPath: vscode.Uri;
 
     private timeout?: NodeJS.Timeout;
 
-    constructor(context: vscode.ExtensionContext, readonly component: ComponentI, private readonly workspaceName: string, private readonly workspaceFolder: vscode.WorkspaceFolder, private outputChannel: vscode.OutputChannel ) {
-		this.componentStatus = component;
-		this.rootPath = vscode.Uri.joinPath(workspaceFolder.uri, component.name);
-		this.ewm = new Ewm(this.rootPath, outputChannel);
+    constructor(context: vscode.ExtensionContext, ewmShare: EwmShareI, outputChannel: vscode.OutputChannel) {
+		// readonly component: ComponentI, private readonly workspaceName: string, private readonly workspaceFolder: vscode.WorkspaceFolder, private outputChannel: vscode.OutputChannel ) {
+		
+		this.componentName = ewmShare.remote.component.name;
+		this.componentRootUri = vscode.Uri.file(ewmShare.local);
+		this.workspaceName = ewmShare.remote.workspace.name;
+
+		// this.rootPath = vscode.Uri.joinPath(workspaceFolder.uri, component.name);
+		this.ewm = new Ewm(this.componentRootUri, outputChannel);
 
 
-		this.jsEwmScm = vscode.scm.createSourceControl('ewm', component.name, this.rootPath);
+		this.jsEwmScm = vscode.scm.createSourceControl('ewm', this.componentName, this.componentRootUri);
 
         this.incommingResources = this.jsEwmScm.createResourceGroup("incoming", "incoming-changes");
 		this.outgoingResources = this.jsEwmScm.createResourceGroup("outgoing", "outgoing-changes");
 		this.unresolvedResources = this.jsEwmScm.createResourceGroup("unresolved", "unresolved-changes");
-
-		this.componentName = component.name;
     
         // const fileSystemWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceFolder, "*.*"));
 		// fileSystemWatcher.onDidChange(uri => this.onResourceChange(uri), context.subscriptions);
@@ -50,65 +49,87 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
         context.subscriptions.push(this.jsEwmScm);
         // context.subscriptions.push(fileSystemWatcher);
 
-		this.updateResourceGroups();
 		this.jsEwmScm.quickDiffProvider = this;
     }
 
-	public updateResourceGroups(): void {
-		let incommingChanges = this.componentStatus['incoming-changes'];
-		let outgoingChanges = this.componentStatus['outgoing-changes'];		
-		let unresolvedChanges = this.componentStatus.unresolved;
+	public async updateResourceGroups(): Promise<void> {
 
-		// Update incomming changes
-		this.incommingResources.resourceStates = [];
-		let resourceStates = [];
-		for (const changeSet of incommingChanges) {
+		const workspaceStatus : StatusDataI | null = await this.ewm.getStatus();
+		let componentsStatus : ComponentI[] = [] as ComponentI[];
+		let componentStatus : ComponentI = {} as ComponentI;
 
-			for (const change of changeSet.changes) {
-				resourceStates.push(this.toSourceControlResourceState(change));
+		if (workspaceStatus) {
+			// Find workspace in statusData
+			for (var workspace of workspaceStatus.workspaces)
+			{
+				if (workspace.name && workspace.name === this.workspaceName)
+				{
+					componentsStatus = workspace.components;
+					break;
+				}
 			}
-		}
-		this.incommingResources.resourceStates = resourceStates;
 
-		// Update outgoing changes
-		this.outgoingResources.resourceStates = [];
-		resourceStates = [];
-		for (const changeSet of outgoingChanges) {
-			for (const change of changeSet.changes) {
-				resourceStates.push(this.toSourceControlResourceState(change));
+			// Find Component in componentsStatus
+			for (var _componentStatus of componentsStatus)
+			{
+				if (_componentStatus.name && _componentStatus.name === this.componentName)
+				{
+					componentStatus = _componentStatus;
+					break;
+				}
 			}
-		}
-		this.outgoingResources.resourceStates = resourceStates;
 
-		// Update unresolved Changes
-		this.unresolvedResources.resourceStates = [];
-		resourceStates = [];
-		if (!!unresolvedChanges) {
-			for (const change of unresolvedChanges) {
-				resourceStates.push(this.toSourceControlResourceState(change));
+			let incommingChanges = componentStatus['incoming-changes'];
+			let outgoingChanges = componentStatus['outgoing-changes'];		
+			let unresolvedChanges = componentStatus.unresolved;
+
+			// Update incomming changes
+			this.incommingResources.resourceStates = [];
+			let resourceStates = [];
+			for (const changeSet of incommingChanges) {
+
+				for (const change of changeSet.changes) {
+					resourceStates.push(this.toSourceControlResourceState(change));
+				}
 			}
-			this.unresolvedResources.resourceStates = resourceStates;
+			this.incommingResources.resourceStates = resourceStates;
+
+			// Update outgoing changes
+			this.outgoingResources.resourceStates = [];
+			resourceStates = [];
+			for (const changeSet of outgoingChanges) {
+				for (const change of changeSet.changes) {
+					resourceStates.push(this.toSourceControlResourceState(change));
+				}
+			}
+			this.outgoingResources.resourceStates = resourceStates;
+
+			// Update unresolved Changes
+			this.unresolvedResources.resourceStates = [];
+			resourceStates = [];
+			if (!!unresolvedChanges) {
+				for (const change of unresolvedChanges) {
+					resourceStates.push(this.toSourceControlResourceState(change));
+				}
+				this.unresolvedResources.resourceStates = resourceStates;
+			}
 		}
 	}
 
 	provideOriginalResource(uri: vscode.Uri, _token: vscode.CancellationToken): vscode.ProviderResult<vscode.Uri> {
-		// converts the local file uri to jsfiddle:file.ext
-		// const relativePath = workspace.asRelativePath(uri.fsPath);
-		// // uri.scheme = EWM_SCHEME;
-		// let ewmUri = new vscode.Uri(EWM_SCHEME, '', uri.path)
-		// return uri;
+		// Convert to EWM resource uri.
 		return vscode.Uri.parse(`${EWM_SCHEME}:${uri.path}`);
 	}
 
     toSourceControlResourceState(change: ChangeI | UnresolvedChangeI ): vscode.SourceControlResourceState {
 
-		const changePath = vscode.Uri.file(change.path);
-		const docUri = vscode.Uri.joinPath(this.workspaceFolder.uri, changePath.fsPath);
+		const repositoryFilePath = vscode.Uri.file(change.path);
+		// Remove first folder from repositoryFilePath path.
+		const repositoryFilePathWithoutComponent = repositoryFilePath.fsPath.substring( repositoryFilePath.path.indexOf('/', 1) );
+		const localFileUri = vscode.Uri.joinPath(this.componentRootUri, repositoryFilePathWithoutComponent);
 		const cancelToken = new vscode.CancellationTokenSource();
-		// const fiddlePart = toExtension(docUri).toUpperCase();
 
-
-		const repositoryUri = this.provideOriginalResource(changePath, cancelToken.token);
+		const repositoryUri = this.provideOriginalResource(repositoryFilePath, cancelToken.token);
 
 		let command : vscode.Command | undefined;
 		if (change.state.content_change)
@@ -116,13 +137,13 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 			command = {
 				title: "Show changes",
 				command: "vscode.diff",
-				arguments: [repositoryUri, docUri, `EWM#${docUri.path}`],
+				arguments: [repositoryUri, localFileUri, `EWM#${localFileUri.path}`],
 				tooltip: "Diff your changes"
 			};
 		}
 	        
 		const resourceState: vscode.SourceControlResourceState = {
-			resourceUri: docUri,
+			resourceUri: localFileUri,
 			command: command,
 			decorations: {
 				tooltip: 'File was changed.'
@@ -137,20 +158,20 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 	// 	this.timeout = setTimeout(() => this.tryUpdateChangedGroup(), 500);
 	// }
 
-    public tryUpdateChangedGroup( statusData: StatusDataI ) {
-		const emptyStatus : ComponentI = {} as ComponentI;
-		this.componentStatus = emptyStatus;
-		// Find Component in statusData
-		for (var component of statusData.workspaces[0].components)
-		{
-			if (component.name && component.name === this.componentName)
-			{
-				this.componentStatus = component;
-				break;
-			}
-		}
-		this.updateResourceGroups();
-	}
+    // public tryUpdateChangedGroup( statusData: StatusDataI ) {
+	// 	const emptyStatus : ComponentI = {} as ComponentI;
+	// 	this.componentStatus = emptyStatus;
+	// 	// Find Component in statusData
+	// 	for (var component of statusData.workspaces[0].components)
+	// 	{
+	// 		if (component.name && component.name === this.componentName)
+	// 		{
+	// 			this.componentStatus = component;
+	// 			break;
+	// 		}
+	// 	}
+	// 	this.updateResourceGroups();
+	// }
 
     /** This is where the source control determines, which documents were updated, removed, and theoretically added. */
 	// async updateChangedGroup(): Promise<void> {
@@ -223,6 +244,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		}
 
 		// Check if starting with workspace name
+		// TODO: Move to the toSourceControlResourceState.
 		if (relativeUri.startsWith( '/' + this.workspaceName ))
 		{
 			relativeUri = relativeUri.substring(this.workspaceName.length + 1 );
