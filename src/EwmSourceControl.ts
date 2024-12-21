@@ -123,21 +123,33 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 
     toSourceControlResourceState(change: ChangeI | UnresolvedChangeI ): vscode.SourceControlResourceState {
 
-		const repositoryFilePath = vscode.Uri.file(change.path);
+		const repositoryFileUri = vscode.Uri.file(change.path);
+		let repositoryFilePathStripped = change.path;
 		// Remove first folder from repositoryFilePath path.
-		const repositoryFilePathWithoutComponent = repositoryFilePath.fsPath.substring( repositoryFilePath.path.indexOf('/', 1) );
-		const localFileUri = vscode.Uri.joinPath(this.componentRootUri, repositoryFilePathWithoutComponent);
+		if ( repositoryFilePathStripped.startsWith( '/' + this.workspaceName ) )
+		{
+			repositoryFilePathStripped = repositoryFilePathStripped.substring(this.workspaceName.length +1);
+		}
+
+		if ( repositoryFilePathStripped.startsWith( '/' + this.componentName ) )
+		{
+			repositoryFilePathStripped = repositoryFilePathStripped.substring(this.componentName.length +1);
+		}
+
+		// const repositoryFilePathWithoutComponent = repositoryFilePath.fsPath.substring( repositoryFilePath.path.indexOf('/', 1) );
+
+		const localFileUri = vscode.Uri.joinPath(this.componentRootUri, repositoryFilePathStripped);
 		const cancelToken = new vscode.CancellationTokenSource();
-
-		const repositoryUri = this.provideOriginalResource(repositoryFilePath, cancelToken.token);
-
+		const repositoryUri = this.provideOriginalResource(repositoryFileUri, cancelToken.token);
+		
 		let command : vscode.Command | undefined;
 		if (change.state.content_change)
 		{
+			let title = repositoryFilePathStripped;
 			command = {
 				title: "Show changes",
 				command: "vscode.diff",
-				arguments: [repositoryUri, localFileUri, `EWM#${localFileUri.path}`],
+				arguments: [repositoryUri, localFileUri, title],
 				tooltip: "Diff your changes"
 			};
 		}
