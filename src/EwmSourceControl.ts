@@ -202,18 +202,31 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		this._onDidChange.dispose();
 	}
 
+	/**
+	 * Provides the content of a text document for a given URI.
+	 *
+	 * @param uri - The URI of the text document.
+	 * @param token - A cancellation token.
+	 * @returns A promise that resolves to the content of the text document, or a string indicating the status.
+	 *
+	 * This method checks if the document content is already loaded. If so, it returns the cached content.
+	 * Otherwise, it retrieves the file from the EWM system, stores it in a temporary directory, reads its content,
+	 * caches it, and then returns the content. If the file is not found or an error occurs during the retrieval,
+	 * appropriate messages are returned.
+	 *
+	 * The method also handles cancellation requests and logs various stages of the process for debugging purposes.
+	 */
 	provideTextDocumentContent(uri: vscode.Uri, token: vscode.CancellationToken): vscode.ProviderResult<string> {
 		if (token.isCancellationRequested) { return "Canceled"; }
 
-		let relativeUri = uri.fsPath;
+		let relativeUri = uri.path;
 		// Check if string starts with activeWorkspaceFolder.
-		if (relativeUri.startsWith(this.activeWorkspaceFolder.fsPath)) {
+		if (relativeUri.startsWith(this.activeWorkspaceFolder.path)) {
 			// Remove activeWorkspaceFolder name from uri.
-			relativeUri = '/' + relativeUri.substring(this.activeWorkspaceFolder.fsPath.length + 1);
-
+			relativeUri = '/' + relativeUri.substring(this.activeWorkspaceFolder.path.length + 1);
 		}
 
-		console.log(`provideTextDocumentContent uri: ${uri.path}  relativeUri: ${relativeUri}  activeWorkspaceFolder: ${this.activeWorkspaceFolder.fsPath}`);
+		console.log(`provideTextDocumentContent uri: ${uri.path}  relativeUri: ${relativeUri}  activeWorkspaceFolder: ${this.activeWorkspaceFolder.path}`);
 
 		// Check if uri is already present in the loadedFiles.
 		// If so then return the tempUri.If not then get file from ewm and store it in system tempdir.
@@ -246,7 +259,6 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 			this.loadedFiles.set(relativeUri, fileContent);
 			// Remove the temp file after reading the content.
 			fs.unlinkSync(tempFileUri.fsPath);
-
 			this._onDidChange.fire(uri);
         }).catch((error) => {
             // Handle any errors that occur during the execution
