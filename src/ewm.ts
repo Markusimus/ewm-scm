@@ -41,13 +41,23 @@ export class Ewm {
         });
     }
 
-    // public async getSandbox() : Promise<EwmSandboxI | null> {
+    public async getSandbox() : Promise<EwmSandboxI | null> {
+        let jsonSandbox: EwmSandboxI | null = null;
 
-    //     const commandRes = await this.execLscm("show sandbox-structure -j");
-    //     const jsonSandbox : EwmSandboxI = JSON.parse(commandRes.toString());
-    //     this.sandBoxPath = vscode.Uri.file(jsonSandbox.sandbox);
-    //     return jsonSandbox;
-    // }
+        try {
+            const commandRes = await this.execLscm("show sandbox-structure -j");
+            jsonSandbox = JSON.parse(commandRes.toString());
+            
+        } catch (error) {
+
+            vscode.window.showErrorMessage('Could not read file: ' + error);
+            console.error(error);
+            
+        }
+        
+        // this.sandBoxPath = vscode.Uri.file(jsonSandbox.sandbox);
+        return jsonSandbox;
+    }
 
     public async getFile(sourceFile: string, component: string, workspace: string, outUri: vscode.Uri): Promise<void> {
         // lscm get file -w VSCodeWork -c ScriptComponent -f /testDir/testfile.txt ../../../testfileLoad1.txt
