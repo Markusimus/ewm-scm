@@ -1,10 +1,11 @@
 # ewm-sc README
 
-The IBM EWM version source control. 
+The IBM EWM version source control extension for VS Code.
 
 ## Features
 
 This extension dispalys incomming, outgoing, and unresolve file changes.
+It implements original file for Diff and quick diff.
 
 ## Requirements
 
@@ -18,20 +19,19 @@ For example:
 
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* `ewm-scm.enable`: Enable/disable this extension.
+
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+This extension is still in development.
+Many issues and unfinished functions are expected.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
 
-### 0.0.1
-
-Initial release of ewm scm.
+### 0.0.3
+Initial development release that works in MacOS and Windows.
 
 
 ---

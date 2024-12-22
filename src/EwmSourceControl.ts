@@ -145,7 +145,9 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 		let command : vscode.Command | undefined;
 		if (change.state.content_change)
 		{
-			let title = repositoryFilePathStripped;
+			// use last filename as title
+			let title = repositoryFilePathStripped.split('/').pop();
+			
 			command = {
 				title: "Show changes",
 				command: "vscode.diff",

@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 import { EwmSourceControl, EwmDocumentContentProvider, EWM_SCHEME } from './EwmSourceControl';
 import { Ewm } from './ewm';
 
-
 let ewmDocumentContentProvider: EwmDocumentContentProvider;
 
 // This method is called when your extension is activated
@@ -17,14 +16,11 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(outputChannel);
 	let ewmSourceControls: EwmSourceControl[] = [];
 
-	
-
   	const showOutput = true; // configuration.get<boolean>("showOutput");
 
   	if (showOutput) {
     	outputChannel.show();
   	}
-
 
 	const rootPath =
 	vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
