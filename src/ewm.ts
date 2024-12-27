@@ -1,14 +1,24 @@
 import * as vscode from 'vscode';
-import StatusDataI from './ewmStatusInterface';
+import {StatusDataI, WorkspaceI} from './ewmStatusInterface';
 import {EwmSandboxI} from './ewmSandboxInterface';
 import { exec, ExecOptions } from 'child_process';
 
+/**
+ * The `Ewm` class provides methods to interact with the EWM (Engineering Workflow Manager) system using the lscm commands.
+ * It allows executing commands, retrieving sandbox structures, files, and workspace statuses.
+ */
 export class Ewm {
     public version: string = "0";
 
     constructor( private rootPath: vscode.Uri, private outputChannel: vscode.OutputChannel) {
     };
 
+    /**
+     * Displays an error message to the user and logs the error to the console.
+     *
+     * @param message - The message to display to the user.
+     * @param error - The error object or message to log and display.
+     */
     private showError(message: string, error: any): void {
         vscode.window.showErrorMessage(`${message}: ${error.message || error}`);
         console.error(error);
@@ -130,5 +140,30 @@ export class Ewm {
             this.showError('Could not read file', e);
         }
         return retStatus;
+    }
+
+    /**
+     * Checks in a file with the provided file path.
+     *
+     * @param file - The URI of the file to check in.
+     * @returns A promise that resolves with the status data or rejects with an error.
+     *
+     * @throws Will show an error message and reject the promise if the command execution fails.
+     */
+    public async checkin(listOfFiles: vscode.Uri[]): Promise<WorkspaceI> {
+        let command = `checkin -j `;
+        for (const file of listOfFiles) {
+            command += ` "${file.fsPath}"`;
+        }
+        
+        let retValue: WorkspaceI = { } as WorkspaceI;
+        try {
+            let commandResponse = await this.execLscm(command);
+            retValue = (JSON.parse(commandResponse) as WorkspaceI[])[0];
+        } catch (e) {
+            this.showError('Could not check in file', e);
+        }
+
+        return retValue;
     }
 }

@@ -2,14 +2,19 @@
   "name": "ewm-scm",
 	"displayName": "vscode-EWM",
 	"description": "The SCM extension for Engineering Workflow Manger.",
-	"version": "0.0.4",
+	"version": "0.0.5",
+  "license": "MIT",
 	"engines": {
     "vscode": "^1.91.0"
   },
+  "private": true,
+  "icon": "images/EWM_SC_icon.jpg",
   "categories": [
-    "Other"
+    "SCM Providers"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "workspaceContains:.jazz5"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -20,8 +25,22 @@
       {
         "command": "ewm-scm.ewmUpdate",
         "title": "EWM Update"
+      },
+      {
+        "command": "ewm-scm.checkin",
+        "title": "Check-in",
+        "category": "SCM"
       }
-    ]
+    ],
+    "menus": {
+			"scm/resourceState/context": [
+				{
+					"command": "ewm-scm.checkin",
+          "when": "scmProvider == ewm && scmResourceGroup == unresolved",
+          "group": "navigation"
+				}
+			]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
