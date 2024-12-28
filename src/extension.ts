@@ -1,14 +1,14 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { EwmSourceControl, EwmDocumentContentProvider, EWM_SCHEME } from './EwmSourceControl';
+import { EwmRepository, EwmDocumentContentProvider, EWM_SCHEME } from './EwmSourceControl';
 import { Ewm } from './ewm';
 import { StatusDataI, WorkspaceI } from './ewmStatusInterface';
 // import { StartupSnapshotCallbackFn } from 'v8';
 
 let ewmDocumentContentProvider: EwmDocumentContentProvider;
 let rootPath: vscode.Uri | undefined;
-let ewmSourceControls: Map<string, EwmSourceControl> = new Map();
+let ewmSourceControls: Map<string, EwmRepository> = new Map();
 const outputChannel = vscode.window.createOutputChannel("EWM");
 
 // This method is called when your extension is activated
@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const disposableUpdate = vscode.commands.registerCommand('ewm-scm.ewmUpdate', async () => {
 		if (rootPath) {
 			for (const [componentName, ewmSourceControl] of ewmSourceControls.entries()) {
-				await ewmSourceControl.updateResourceGroups();
+				await ewmSourceControl.status();
 			}
 		} else {
 			vscode.window.showWarningMessage('No workspace open');
@@ -44,12 +44,12 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(disposableUpdate);
 
-	context.subscriptions.push(vscode.commands.registerCommand("ewm-scm.checkin",
-		async (...resourceStates: vscode.SourceControlResourceState[]) => {
-			if (rootPath) {
+	// context.subscriptions.push(vscode.commands.registerCommand("ewm-scm.checkin",
+	// 	async (...resourceStates: vscode.SourceControlResourceState[]) => {
+	// 		if (rootPath) {
 				
-			}
-		}));
+	// 		}
+	// 	}));
 
 	let autoInit = vscode.workspace.getConfiguration('ewm-scm').get('autoInit', true);
 
@@ -74,8 +74,8 @@ async function initEwm(context: vscode.ExtensionContext) {
 				context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EWM_SCHEME, ewmDocumentContentProvider));
 
 				for (const sandboxShare of sandbox.shares) {
-					const ewmSourceControl = new EwmSourceControl(context, sandboxShare, outputChannel);
-					await ewmSourceControl.updateResourceGroups();
+					const ewmSourceControl = new EwmRepository(context, sandboxShare, outputChannel);
+					await ewmSourceControl.status();
 					// ewmSourceControls.push(ewmSourceControl);
 					ewmSourceControls.set(sandboxShare.remote.component.name, ewmSourceControl);
 				}

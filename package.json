@@ -2,10 +2,10 @@
   "name": "ewm-scm",
 	"displayName": "vscode-EWM",
 	"description": "The SCM extension for Engineering Workflow Manger.",
-	"version": "0.0.5",
+	"version": "0.0.6",
   "license": "MIT",
 	"engines": {
-    "vscode": "^1.91.0"
+    "vscode": "^1.96.0"
   },
   "private": true,
   "icon": "images/EWM_SC_icon.jpg",
@@ -51,15 +51,21 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.91.0",
+    "@types/byline": "4.2.31",
+    "byline": "^4.0.0",
+    "file-type": "^16.5.4",
+    "@types/vscode": "^1.96.0",
     "@types/mocha": "^10.0.7",
-    "@types/node": "20.x",
+    "mocha": "^11.0.1",
+    "@types/node": "^22.0.0",
+    "@types/which": "^1.3.0",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
     "eslint": "^8.57.0",
     "typescript": "^5.4.5",
     "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.4.0"
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/iconv-lite-umd":"^0.7.0"
   },
   "repository": {
     "type": "git",

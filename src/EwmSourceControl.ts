@@ -6,8 +6,9 @@ import { StatusDataI, ComponentI, ChangesetI, ChangeI, UnresolvedChangeI, Worksp
 import { EwmShareI } from './ewmSandboxInterface';
 import { Ewm } from './ewm';
 import os from 'os';
+import * as path from 'path';
 import { debounce, memoize, throttle } from './decorators';
-import { Uri } from 'vscode';
+import { Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource } from 'vscode';
 
 export const CONFIGURATION_FILE = '.jsewm';
 export const EWM_SCHEME = 'ewm';
@@ -36,179 +37,93 @@ export const enum Status {
 	BOTH_MODIFIED
 }
 
-export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProvider {
-	private jsEwmScm: vscode.SourceControl;
-    private incommingResources: vscode.SourceControlResourceGroup;
-	private outgoingResources: vscode.SourceControlResourceGroup;
-	private unresolvedResources: vscode.SourceControlResourceGroup;
+export const enum ResourceGroupType {
+	Incomming,
+	Outgoing,
+	Unresolved
+}
+
+const iconsRootPath = path.join(path.dirname(__dirname), 'resources', 'icons');
+function getIconUri(iconName: string, theme: string): Uri {
+	return Uri.file(path.join(iconsRootPath, theme, `${iconName}.svg`));
+}
+
+export interface EwmResourceGroup extends SourceControlResourceGroup {
+	resourceStates: Resource[];
+}
+
+interface EwmResourceGroups {
+	incommingGroup?: Resource[];
+	outgoingGroup?: Resource[];
+	unresolvedGroup?: Resource[];
+}
+
+export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
+	private _sourceControl: vscode.SourceControl;
 	private componentName : string;
 	private workspaceName: string;
-	private componentRootUri: Uri;
+	private _componentRootUri: Uri;
 	private ewm : Ewm;
-	// private rootPath: Uri;
+	private disposables: Disposable[] = [];
+	private updateModelStateCancellationTokenSource: CancellationTokenSource | undefined;
+
+	private _onDidChangeStatus = new EventEmitter<void>();
+		readonly onDidRunGitStatus: Event<void> = this._onDidChangeStatus.event;
+
+	private _incommingGroup: SourceControlResourceGroup;
+	get incommingGroup(): EwmResourceGroup { return this._incommingGroup as EwmResourceGroup; }
+
+	private _outgoingGroup: SourceControlResourceGroup;
+	get outgoingGroup(): EwmResourceGroup { return this._outgoingGroup as EwmResourceGroup; }
+
+	private _unresolvedGroup: SourceControlResourceGroup;
+	get unresolvedGroup(): EwmResourceGroup { return this._unresolvedGroup as EwmResourceGroup; }
+
+	get componentRootUri(): Uri {
+		return this._componentRootUri;
+	}
 
     private timeout?: NodeJS.Timeout;
+
+	private resourceCommandResolver = new ResourceCommandResolver(this);
 
     constructor(context: vscode.ExtensionContext, ewmShare: EwmShareI, private outputChannel: vscode.OutputChannel) {
 		
 		this.componentName = ewmShare.remote.component.name;
-		this.componentRootUri = Uri.file(ewmShare.local);
+		this._componentRootUri = Uri.file(ewmShare.local);
 		this.workspaceName = ewmShare.remote.workspace.name;
 
-		this.ewm = new Ewm(this.componentRootUri, outputChannel);
+		this.ewm = new Ewm(this._componentRootUri, outputChannel);
+		// this._sourceControl = vscode.scm.createSourceControl('ewm', this.componentName, this._componentRootUri);
+		this._sourceControl = vscode.scm.createSourceControl('ewm', 'EWM', this._componentRootUri);
+		this.disposables.push(this._sourceControl);
 
+		this._sourceControl.acceptInputCommand = { command: 'ewm-scm.commit', title: 'Commit', arguments: [this._sourceControl] };
+		// this._sourceControl.inputBox.validateInput = this.validateInput.bind(this);
 
-		this.jsEwmScm = vscode.scm.createSourceControl('ewm', this.componentName, this.componentRootUri);
-
-        this.incommingResources = this.jsEwmScm.createResourceGroup("incoming", "incoming-changes");
-		this.outgoingResources = this.jsEwmScm.createResourceGroup("outgoing", "outgoing-changes");
-		this.unresolvedResources = this.jsEwmScm.createResourceGroup("unresolved", "unresolved-changes");
+		this._incommingGroup = this._sourceControl.createResourceGroup('incoming', 'Incoming Changes');
+		this._outgoingGroup = this._sourceControl.createResourceGroup('outgoing', 'Outgoing Changes');
+		this._unresolvedGroup = this._sourceControl.createResourceGroup('unresolved', 'Unresolved Changes');
     
         // const fileSystemWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceFolder, "*.*"));
 		// fileSystemWatcher.onDidChange(uri => this.onResourceChange(uri), context.subscriptions);
 		// fileSystemWatcher.onDidCreate(uri => this.onResourceChange(uri), context.subscriptions);
 		// fileSystemWatcher.onDidDelete(uri => this.onResourceChange(uri), context.subscriptions);
 
-        context.subscriptions.push(this.jsEwmScm);
+        context.subscriptions.push(this._sourceControl);
         // context.subscriptions.push(fileSystemWatcher);
 
-		this.jsEwmScm.quickDiffProvider = this;
+		this._sourceControl.quickDiffProvider = this;
     }
 
-	public async updateResourceGroups(): Promise<void> {
-
-		const workspaceStatus : StatusDataI | null = await this.ewm.getStatus();
-		let componentsStatus : ComponentI[] = [] as ComponentI[];
-		let componentStatus : ComponentI = {} as ComponentI;
-
-		if (workspaceStatus) {
-			// Find workspace in statusData
-			for (var workspace of workspaceStatus.workspaces)
-			{
-				if (workspace.name && workspace.name === this.workspaceName)
-				{
-					componentsStatus = workspace.components;
-					break;
-				}
-			}
-
-			// Find Component in componentsStatus
-			for (var _componentStatus of componentsStatus)
-			{
-				if (_componentStatus.name && _componentStatus.name === this.componentName)
-				{
-					componentStatus = _componentStatus;
-					break;
-				}
-			}
-
-			this.updateComponent(componentStatus);
-		}
-	}
 
 	provideOriginalResource(uri: Uri, _token: vscode.CancellationToken): vscode.ProviderResult<Uri> {
 		// Convert to EWM resource uri.
 		return Uri.parse(`${EWM_SCHEME}:${uri.path}`);
 	}
 
-    private toSourceControlResourceState(change: ChangeI | UnresolvedChangeI, prefixDir?: string ): vscode.SourceControlResourceState {
 
-		const repositoryFileUri = Uri.file(change.path);
-		let repositoryFilePathStripped = change.path;
-		// Remove first folder from repositoryFilePath path.
-		if ( repositoryFilePathStripped.startsWith( '/' + this.workspaceName ) )
-		{
-			repositoryFilePathStripped = repositoryFilePathStripped.substring(this.workspaceName.length +1);
-		}
-
-		if ( repositoryFilePathStripped.startsWith( '/' + this.componentName ) )
-		{
-			repositoryFilePathStripped = repositoryFilePathStripped.substring(this.componentName.length +1);
-		}
-
-		// const repositoryFilePathWithoutComponent = repositoryFilePath.fsPath.substring( repositoryFilePath.path.indexOf('/', 1) );
-
-		const localFileUri = Uri.joinPath(this.componentRootUri, repositoryFilePathStripped);
-		let localFileUriPrefix = localFileUri;
-		if( prefixDir )
-		{
-			localFileUriPrefix = Uri.joinPath( Uri.file(prefixDir), localFileUri.path);
-		}
-		const cancelToken = new vscode.CancellationTokenSource();
-		const repositoryUri = this.provideOriginalResource(repositoryFileUri, cancelToken.token);
-		
-		let command : vscode.Command | undefined;
-		if (change.state.content_change)
-		{
-			// use last filename as title
-			let title = repositoryFilePathStripped.split('/').pop();
-			
-			command = {
-				title: "Show changes",
-				command: "vscode.diff",
-				arguments: [repositoryUri, localFileUri, title],
-				tooltip: "Diff your changes"
-			};
-		}
-	        
-		const resourceState: vscode.SourceControlResourceState = {
-			resourceUri: localFileUriPrefix,
-			command: command,
-			decorations: {
-				tooltip: 'File was changed.'
-			}
-		};
-
-		return resourceState;
-	}
-
-	public async updateComponent(componentStatus: ComponentI): Promise<void> {
-		let incommingChanges = componentStatus['incoming-changes'];
-		let outgoingChanges = componentStatus['outgoing-changes'];		
-		let unresolvedChanges = componentStatus.unresolved;
-
-		let resourceStates = [];
-
-		// Update incomming changes
-		if (incommingChanges) {
-			this.incommingResources.resourceStates = [];
-			for (const changeSet of incommingChanges) {
-
-				let changesetName = changeSet.uuid;
-
-				for (const change of changeSet.changes) {
-					resourceStates.push(this.toSourceControlResourceState(change));
-				}
-			}
-			this.incommingResources.resourceStates = resourceStates;
-		}
-
-		// Update outgoing changes
-		if (outgoingChanges) {
-			this.outgoingResources.resourceStates = [];
-			resourceStates = [];
-			for (const changeSet of outgoingChanges) {
-				for (const change of changeSet.changes) {
-					resourceStates.push(this.toSourceControlResourceState(change, "1001"));
-				}
-			}
-			this.outgoingResources.resourceStates = resourceStates;
-		}
-
-		// Update unresolved Changes
-		if (unresolvedChanges) {
-			this.unresolvedResources.resourceStates = [];
-			resourceStates = [];
-			for (const change of unresolvedChanges) {
-				resourceStates.push(this.toSourceControlResourceState(change));
-			}
-			this.unresolvedResources.resourceStates = resourceStates;
-
-			// this.unresolvedResources.resourceStates.
-		}
-	}
-
-	public async checkin(resourceStates: vscode.SourceControlResourceState[]): void {
+	public async checkin(resourceStates: SourceControlResourceState[]): Promise<void> {
 		this.outputChannel.appendLine('commit: ' + resourceStates);
 		let uriList: Uri[] = [];
 		for (const resourceState of resourceStates) {
@@ -216,7 +131,7 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 		}
 
 		let workspaceUpdate: WorkspaceI = await this.ewm.checkin(uriList);
-		this.updateResourceGroups();
+		this.updateModelState();
 
 		// for (const componentData of workspaceUpdate.components) {
 		// 	this.outputChannel.appendLine('component: ' + componentData.name);
@@ -231,99 +146,455 @@ export class EwmSourceControl implements vscode.Disposable, vscode.QuickDiffProv
 
     dispose() {
 		// this._onRepositoryChange.dispose();
-		this.jsEwmScm.dispose();
+		this._sourceControl.dispose();
+	}
+
+
+	// @throttle
+	async status(): Promise<void> {
+		// await this.run(Operation.Status);
+		await this.updateModelState();
+	}
+
+	private async updateModelState(optimisticResourcesGroups?: EwmResourceGroups) {
+		this.updateModelStateCancellationTokenSource?.cancel();
+
+		this.updateModelStateCancellationTokenSource = new CancellationTokenSource();
+		await this._updateModelState(optimisticResourcesGroups, this.updateModelStateCancellationTokenSource.token);
+	}
+
+	private async _updateModelState(optimisticResourcesGroups?: EwmResourceGroups, cancellationToken?: CancellationToken): Promise<void> {
+		try {
+			// Optimistically update resource groups
+			if (optimisticResourcesGroups) {
+				this._updateResourceGroupsState(optimisticResourcesGroups);
+			}
+
+			// const [HEAD, remotes, submodules, rebaseCommit, mergeInProgress, cherryPickInProgress, commitTemplate] =
+			// 	await Promise.all([
+			// 		this.repository.getHEADRef(),
+			// 		this.repository.getRemotes(),
+			// 		this.repository.getSubmodules(),
+			// 		this.getRebaseCommit(),
+			// 		this.isMergeInProgress(),
+			// 		this.isCherryPickInProgress(),
+			// 		this.getInputTemplate()]);
+
+			// this._HEAD = HEAD;
+			// this._remotes = remotes!;
+			// this._submodules = submodules!;
+			// this.rebaseCommit = rebaseCommit;
+			// this.mergeInProgress = mergeInProgress;
+			// this.cherryPickInProgress = cherryPickInProgress;
+
+			// this._sourceControl.commitTemplate = commitTemplate;
+
+			// Execute cancellable long-running operation
+			// const [resourceGroups, refs] =
+			// 	await Promise.all([
+			// 		this.getStatus(cancellationToken),
+			// 		this.getRefs({}, cancellationToken)]);
+
+			// this._refs = refs;
+
+			const resourceGroups = await this.getStatus(cancellationToken);
+			this._updateResourceGroupsState(resourceGroups);
+
+			this._onDidChangeStatus.fire();
+		}
+		catch (err) {
+			if (err instanceof CancellationError) {
+				return;
+			}
+
+			throw err;
+		}
+	}
+
+	private _updateResourceGroupsState(resourcesGroups: EwmResourceGroups): void {
+		// set resource groups
+		if (resourcesGroups.incommingGroup) { this.incommingGroup.resourceStates = resourcesGroups.incommingGroup; }
+		if (resourcesGroups.outgoingGroup) { this.outgoingGroup.resourceStates = resourcesGroups.outgoingGroup; }
+		if (resourcesGroups.unresolvedGroup) { this.unresolvedGroup.resourceStates = resourcesGroups.unresolvedGroup; }
+
+		// set count badge
+		// this.setCountBadge();
+	}
+
+	private async getStatus(cancellationToken?: CancellationToken): Promise<EwmResourceGroups> {
+		if (cancellationToken && cancellationToken.isCancellationRequested) {
+			throw new CancellationError();
+		}
+
+		const config = workspace.getConfiguration('ewm-scm');
+		const useIcons = !config.get<boolean>('decorations.enabled', true);
+
+		const incommingGroup: Resource[] = [],
+		outgoingGroup: Resource[] = [],
+		unresolvedGroup: Resource[] = [];
+
+		const workspaceStatus : StatusDataI | null = await this.ewm.getStatus();
+		let componentsStatus : ComponentI[] = [] as ComponentI[];
+		let componentStatus : ComponentI = {} as ComponentI;
+
+		if (workspaceStatus) {
+			// Find workspace in statusData
+			for (var ewmWorkspace of workspaceStatus.workspaces)
+			{
+				if (ewmWorkspace.name && ewmWorkspace.name === this.workspaceName)
+				{
+					componentsStatus = ewmWorkspace.components;
+					break;
+				}
+			}
+
+			// Find Component in componentsStatus
+			for (var _componentStatus of componentsStatus)
+			{
+				if (_componentStatus.name && _componentStatus.name === this.componentName)
+				{
+					componentStatus = _componentStatus;
+					break;
+				}
+			}
+
+			let incommingChanges = componentStatus['incoming-changes'];
+			let outgoingChanges = componentStatus['outgoing-changes'];		
+			let unresolvedChanges = componentStatus.unresolved;
+	
+			// Update incomming changes
+			if (incommingChanges) {
+				for (const changeSet of incommingChanges) {
+					for (const change of changeSet.changes) {
+						incommingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incomming, Uri.file(change.path), Status.MODIFIED, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+					}
+				}
+			}
+	
+			// Update outgoing changes
+			if (outgoingChanges) {
+				for (const changeSet of outgoingChanges) {
+					for (const change of changeSet.changes) {
+						outgoingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Outgoing, Uri.file(change.path), Status.MODIFIED, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+					}
+				}
+			}
+	
+			// Update unresolved Changes
+			if (unresolvedChanges) {
+				for (const change of unresolvedChanges) {
+					unresolvedGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Unresolved, Uri.file(change.path), Status.MODIFIED, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+				}
+			}
+		}
+
+		return { incommingGroup, outgoingGroup, unresolvedGroup };
 	}
 }
 
-// class ResourceCommandResolver {
+class ResourceCommandResolver {
 
-// 	constructor(private repository: Repository) { }
-// }
+	constructor(private repository: EwmRepository) { }
+
+	resolveDefaultCommand(resource: Resource): Command {
+		const config = workspace.getConfiguration('ewm-scm', this.repository.componentRootUri);
+		const openDiffOnClick = config.get<boolean>('openDiffOnClick', true);
+		return openDiffOnClick ? this.resolveChangeCommand(resource) : this.resolveFileCommand(resource);
+	}
+
+	resolveFileCommand(resource: Resource): Command {
+		return {
+			command: 'vscode.open',
+			title: l10n.t('Open'),
+			arguments: [resource.resourceUri]
+		};
+	}
+
+	resolveChangeCommand(resource: Resource): Command {
+		const title = this.getTitle(resource);
+
+		if (!resource.leftUri) {
+			const bothModified = resource.type === Status.BOTH_MODIFIED;
+			if (resource.rightUri && workspace.getConfiguration('ewm-scm').get<boolean>('mergeEditor', false) && (bothModified || resource.type === Status.BOTH_ADDED)) {
+				return {
+					command: 'git.openMergeEditor',
+					title: l10n.t('Open Merge'),
+					arguments: [resource.rightUri]
+				};
+			} else {
+				return {
+					command: 'vscode.open',
+					title: l10n.t('Open'),
+					arguments: [resource.rightUri, { override: bothModified ? false : undefined }, title]
+				};
+			}
+		} else {
+			return {
+				command: 'vscode.diff',
+				title: l10n.t('Open'),
+				arguments: [resource.leftUri, resource.rightUri, title]
+			};
+		}
+	}
 
 
-// export class Resource implements vscode.SourceControlResourceState {
+	private getTitle(resource: Resource): string {
+		const basename = path.basename(resource.resourceUri.fsPath);
+
+		switch (resource.type) {
+			case Status.INDEX_MODIFIED:
+			case Status.INDEX_RENAMED:
+			case Status.INDEX_ADDED:
+				return l10n.t('{0} (Index)', basename);
+
+			case Status.MODIFIED:
+			case Status.BOTH_ADDED:
+			case Status.BOTH_MODIFIED:
+				return l10n.t('{0} (Working Tree)', basename);
+
+			case Status.INDEX_DELETED:
+			case Status.DELETED:
+				return l10n.t('{0} (Deleted)', basename);
+
+			case Status.DELETED_BY_US:
+				return l10n.t('{0} (Theirs)', basename);
+
+			case Status.DELETED_BY_THEM:
+				return l10n.t('{0} (Ours)', basename);
+
+			case Status.UNTRACKED:
+				return l10n.t('{0} (Untracked)', basename);
+
+			case Status.INTENT_TO_ADD:
+			case Status.INTENT_TO_RENAME:
+				return l10n.t('{0} (Intent to add)', basename);
+
+			case Status.TYPE_CHANGED:
+				return l10n.t('{0} (Type changed)', basename);
+
+			default:
+				return '';
+		}
+	}
+
+}
+
+
+export class Resource implements SourceControlResourceState {
 	
-// 	static getStatusLetter(type: Status): string {
-// 		switch (type) {
-// 			case Status.INDEX_MODIFIED:
-// 			case Status.MODIFIED:
-// 				return 'M';
-// 			case Status.INDEX_ADDED:
-// 			case Status.INTENT_TO_ADD:
-// 				return 'A';
-// 			case Status.INDEX_DELETED:
-// 			case Status.DELETED:
-// 				return 'D';
-// 			case Status.INDEX_RENAMED:
-// 			case Status.INTENT_TO_RENAME:
-// 				return 'R';
-// 			case Status.TYPE_CHANGED:
-// 				return 'T';
-// 			case Status.UNTRACKED:
-// 				return 'U';
-// 			case Status.IGNORED:
-// 				return 'I';
-// 			case Status.DELETED_BY_THEM:
-// 				return 'D';
-// 			case Status.DELETED_BY_US:
-// 				return 'D';
-// 			case Status.INDEX_COPIED:
-// 				return 'C';
-// 			case Status.BOTH_DELETED:
-// 			case Status.ADDED_BY_US:
-// 			case Status.ADDED_BY_THEM:
-// 			case Status.BOTH_ADDED:
-// 			case Status.BOTH_MODIFIED:
-// 				return '!'; // Using ! instead of ⚠, because the latter looks really bad on windows
-// 			default:
-// 				throw new Error('Unknown git status: ' + type);
-// 		}
-// 	}
+	private _leftUri?: Uri;		// The repository URI of the resource
+	private _rightUri?: Uri; 	// The Local workspace URI of the resource
 
-// 	static getStatusText(type: Status) {
-// 		switch (type) {
-// 			case Status.INDEX_MODIFIED: return 'Index Modified';
-// 			case Status.MODIFIED: return 'Modified';
-// 			case Status.INDEX_ADDED: return 'Index Added';
-// 			case Status.INDEX_DELETED: return 'Index Deleted';
-// 			case Status.DELETED: return 'Deleted';
-// 			case Status.INDEX_RENAMED: return 'Index Renamed';
-// 			case Status.INDEX_COPIED: return 'Index Copied';
-// 			case Status.UNTRACKED: return 'Untracked';
-// 			case Status.IGNORED: return 'Ignored';
-// 			case Status.INTENT_TO_ADD: return 'Intent to Add';
-// 			case Status.INTENT_TO_RENAME: return 'Intent to Rename';
-// 			case Status.TYPE_CHANGED: return 'Type Changed';
-// 			case Status.BOTH_DELETED: return 'Conflict: Both Deleted';
-// 			case Status.ADDED_BY_US: return 'Conflict: Added By Us';
-// 			case Status.DELETED_BY_THEM: return 'Conflict: Deleted By Them';
-// 			case Status.ADDED_BY_THEM: return 'Conflict: Added By Them';
-// 			case Status.DELETED_BY_US: return 'Conflict: Deleted By Us';
-// 			case Status.BOTH_ADDED: return 'Conflict: Both Added';
-// 			case Status.BOTH_MODIFIED: return 'Conflict: Both Modified';
-// 			default: return '';
-// 		}
-// 	}
+	constructor(
+		private _commandResolver: ResourceCommandResolver,
+		private _resourceGroupType: ResourceGroupType,
+		private _resourceUri: Uri,
+		private _type: Status,
+		private _useIcons: boolean,
+		private _workspaceName: string,
+		private _componentName: string,
+		private _componentRootUri: Uri,
+		private _renameResourceUri?: Uri,		
+	) { 
+		let repositoryFilePathStripped = this._resourceUri.path;
+		// Remove first folder from repositoryFilePath path.
+		if ( repositoryFilePathStripped.startsWith( '/' + this._workspaceName ) )
+		{
+			repositoryFilePathStripped = repositoryFilePathStripped.substring(this._workspaceName.length +1);
+		}
 
-// 	@memoize
-// 	get resourceUri(): Uri {
-// 		if (this.renameResourceUri && (this._type === Status.MODIFIED || this._type === Status.DELETED || this._type === Status.INDEX_RENAMED || this._type === Status.INDEX_COPIED || this._type === Status.INTENT_TO_RENAME)) {
-// 			return this.renameResourceUri;
-// 		}
+		if ( repositoryFilePathStripped.startsWith( '/' + this._componentName ) )
+		{
+			repositoryFilePathStripped = repositoryFilePathStripped.substring(this._componentName.length +1);
+		}
 
-// 		return this._resourceUri;
-// 	}
+		this._rightUri = Uri.joinPath(this._componentRootUri, repositoryFilePathStripped);
+		
+		// Add component name to the path if not present.
+		let repositoryPathWithComponent = this._resourceUri.path;
+		if ( !repositoryPathWithComponent.startsWith( '/' + this._componentName ) )
+		{
+			repositoryPathWithComponent = '/' + this._componentName + repositoryPathWithComponent;
+		}
+		this._leftUri = Uri.parse(`${EWM_SCHEME}:${repositoryPathWithComponent}`);
+	 }
 
+	static getStatusLetter(type: Status): string {
+		switch (type) {
+			case Status.INDEX_MODIFIED:
+			case Status.MODIFIED:
+				return 'M';
+			case Status.INDEX_ADDED:
+			case Status.INTENT_TO_ADD:
+				return 'A';
+			case Status.INDEX_DELETED:
+			case Status.DELETED:
+				return 'D';
+			case Status.INDEX_RENAMED:
+			case Status.INTENT_TO_RENAME:
+				return 'R';
+			case Status.TYPE_CHANGED:
+				return 'T';
+			case Status.UNTRACKED:
+				return 'U';
+			case Status.IGNORED:
+				return 'I';
+			case Status.DELETED_BY_THEM:
+				return 'D';
+			case Status.DELETED_BY_US:
+				return 'D';
+			case Status.INDEX_COPIED:
+				return 'C';
+			case Status.BOTH_DELETED:
+			case Status.ADDED_BY_US:
+			case Status.ADDED_BY_THEM:
+			case Status.BOTH_ADDED:
+			case Status.BOTH_MODIFIED:
+				return '!'; // Using ! instead of ⚠, because the latter looks really bad on windows
+			default:
+				throw new Error('Unknown git status: ' + type);
+		}
+	}
 
-// 	constructor(
-// 		private _commandResolver: ResourceCommandResolver,
-// 		private _resourceGroupType: ResourceGroupType,
-// 		private _resourceUri: Uri,
-// 		private _type: Status,
-// 		private _useIcons: boolean,
-// 		private _renameResourceUri?: Uri,
-// 	) { }
-// }
+	static getStatusText(type: Status) {
+		switch (type) {
+			case Status.INDEX_MODIFIED: return 'Index Modified';
+			case Status.MODIFIED: return 'Modified';
+			case Status.INDEX_ADDED: return 'Index Added';
+			case Status.INDEX_DELETED: return 'Index Deleted';
+			case Status.DELETED: return 'Deleted';
+			case Status.INDEX_RENAMED: return 'Index Renamed';
+			case Status.INDEX_COPIED: return 'Index Copied';
+			case Status.UNTRACKED: return 'Untracked';
+			case Status.IGNORED: return 'Ignored';
+			case Status.INTENT_TO_ADD: return 'Intent to Add';
+			case Status.INTENT_TO_RENAME: return 'Intent to Rename';
+			case Status.TYPE_CHANGED: return 'Type Changed';
+			case Status.BOTH_DELETED: return 'Conflict: Both Deleted';
+			case Status.ADDED_BY_US: return 'Conflict: Added By Us';
+			case Status.DELETED_BY_THEM: return 'Conflict: Deleted By Them';
+			case Status.ADDED_BY_THEM: return 'Conflict: Added By Them';
+			case Status.DELETED_BY_US: return 'Conflict: Deleted By Us';
+			case Status.BOTH_ADDED: return 'Conflict: Both Added';
+			case Status.BOTH_MODIFIED: return 'Conflict: Both Modified';
+			default: return '';
+		}
+	}
+
+	private static Icons: any = {
+		light: {
+			Modified: getIconUri('status-modified', 'light'),
+			Added: getIconUri('status-added', 'light'),
+			Deleted: getIconUri('status-deleted', 'light'),
+			Renamed: getIconUri('status-renamed', 'light'),
+			Copied: getIconUri('status-copied', 'light'),
+			Untracked: getIconUri('status-untracked', 'light'),
+			Ignored: getIconUri('status-ignored', 'light'),
+			Conflict: getIconUri('status-conflict', 'light'),
+			TypeChanged: getIconUri('status-type-changed', 'light')
+		},
+		dark: {
+			Modified: getIconUri('status-modified', 'dark'),
+			Added: getIconUri('status-added', 'dark'),
+			Deleted: getIconUri('status-deleted', 'dark'),
+			Renamed: getIconUri('status-renamed', 'dark'),
+			Copied: getIconUri('status-copied', 'dark'),
+			Untracked: getIconUri('status-untracked', 'dark'),
+			Ignored: getIconUri('status-ignored', 'dark'),
+			Conflict: getIconUri('status-conflict', 'dark'),
+			TypeChanged: getIconUri('status-type-changed', 'dark')
+		}
+	};
+
+	private getIconPath(theme: string): Uri {
+		switch (this.type) {
+			case Status.INDEX_MODIFIED: return Resource.Icons[theme].Modified;
+			case Status.MODIFIED: return Resource.Icons[theme].Modified;
+			case Status.INDEX_ADDED: return Resource.Icons[theme].Added;
+			case Status.INDEX_DELETED: return Resource.Icons[theme].Deleted;
+			case Status.DELETED: return Resource.Icons[theme].Deleted;
+			case Status.INDEX_RENAMED: return Resource.Icons[theme].Renamed;
+			case Status.INDEX_COPIED: return Resource.Icons[theme].Copied;
+			case Status.UNTRACKED: return Resource.Icons[theme].Untracked;
+			case Status.IGNORED: return Resource.Icons[theme].Ignored;
+			case Status.INTENT_TO_ADD: return Resource.Icons[theme].Added;
+			case Status.INTENT_TO_RENAME: return Resource.Icons[theme].Renamed;
+			case Status.TYPE_CHANGED: return Resource.Icons[theme].TypeChanged;
+			case Status.BOTH_DELETED: return Resource.Icons[theme].Conflict;
+			case Status.ADDED_BY_US: return Resource.Icons[theme].Conflict;
+			case Status.DELETED_BY_THEM: return Resource.Icons[theme].Conflict;
+			case Status.ADDED_BY_THEM: return Resource.Icons[theme].Conflict;
+			case Status.DELETED_BY_US: return Resource.Icons[theme].Conflict;
+			case Status.BOTH_ADDED: return Resource.Icons[theme].Conflict;
+			case Status.BOTH_MODIFIED: return Resource.Icons[theme].Conflict;
+			default: throw new Error('Unknown git status: ' + this.type);
+		}
+	}
+
+	// The repository URI of the resource
+	get leftUri(): Uri | undefined {
+		return this._leftUri;
+	}
+
+	// The Local workspace URI of the resource
+	get rightUri(): Uri | undefined {
+		return this._rightUri;
+	}
+
+	get type(): Status { return this._type; }
+
+	private get tooltip(): string {
+		return Resource.getStatusText(this.type);
+	}
+
+	private get strikeThrough(): boolean {
+		switch (this.type) {
+			case Status.DELETED:
+			case Status.BOTH_DELETED:
+			case Status.DELETED_BY_THEM:
+			case Status.DELETED_BY_US:
+			case Status.INDEX_DELETED:
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	// @memoize
+	private get faded(): boolean {
+		// TODO@joao
+		return false;
+		// const workspaceRootPath = this.workspaceRoot.fsPath;
+		// return this.resourceUri.fsPath.substr(0, workspaceRootPath.length) !== workspaceRootPath;
+	}
+
+	// @memoize
+	get resourceUri(): Uri {
+		// if (this.renameResourceUri && (this._type === Status.MODIFIED || this._type === Status.DELETED || this._type === Status.INDEX_RENAMED || this._type === Status.INDEX_COPIED || this._type === Status.INTENT_TO_RENAME)) {
+		// 	return this.renameResourceUri;
+		// }
+
+		return this._resourceUri;
+	}
+
+	// @memoize
+	get command(): Command {
+		return this._commandResolver.resolveDefaultCommand(this);
+	}
+
+	get decorations(): SourceControlResourceDecorations {
+		const light = this._useIcons ? { iconPath: this.getIconPath('light') } : undefined;
+		const dark = this._useIcons ? { iconPath: this.getIconPath('dark') } : undefined;
+		const tooltip = this.tooltip;
+		const strikeThrough = this.strikeThrough;
+		const faded = this.faded;
+		return { strikeThrough, faded, tooltip, light, dark };
+	}
+
+	clone(resourceGroupType?: ResourceGroupType) {
+		return new Resource(this._commandResolver, resourceGroupType ?? this._resourceGroupType, this._resourceUri, this._type, this._useIcons, this._workspaceName, this._componentName, this._componentRootUri, this._renameResourceUri);
+	}
+}
 
 /**
  * Provides the content of the JS Fiddle documents as fetched from the server i.e.  without the local edits.

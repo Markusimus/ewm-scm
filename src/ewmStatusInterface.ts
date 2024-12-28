@@ -108,7 +108,7 @@ export interface ComponentI {
 }
 
 
-interface Workspace {
+export interface WorkspaceI {
     components: ComponentI[];
     "flow-target": FlowTarget;
     isTracked: string;
@@ -121,7 +121,7 @@ interface Workspace {
 
 
 export interface StatusDataI {
-    workspaces: Workspace[];
+    workspaces: WorkspaceI[];
 }
 
 export default StatusDataI;
