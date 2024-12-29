@@ -7,7 +7,7 @@ import { Event, Disposable, EventEmitter, l10n } from 'vscode';
 import { dirname, sep, relative } from 'path';
 import { Readable } from 'stream';
 import { promises as fs, createReadStream } from 'fs';
-import byline from 'byline';
+// import byline from 'byline';
 
 export const isMacintosh = process.platform === 'darwin';
 export const isWindows = process.platform === 'win32';
@@ -205,21 +205,21 @@ export function find<T>(array: T[], fn: (t: T) => boolean): T | undefined {
 	return result;
 }
 
-export async function grep(filename: string, pattern: RegExp): Promise<boolean> {
-	return new Promise<boolean>((c, e) => {
-		const fileStream = createReadStream(filename, { encoding: 'utf8' });
-		const stream = byline(fileStream);
-		stream.on('data', (line: string) => {
-			if (pattern.test(line)) {
-				fileStream.close();
-				c(true);
-			}
-		});
+// export async function grep(filename: string, pattern: RegExp): Promise<boolean> {
+// 	return new Promise<boolean>((c, e) => {
+// 		const fileStream = createReadStream(filename, { encoding: 'utf8' });
+// 		const stream = byline(fileStream);
+// 		stream.on('data', (line: string) => {
+// 			if (pattern.test(line)) {
+// 				fileStream.close();
+// 				c(true);
+// 			}
+// 		});
 
-		stream.on('error', e);
-		stream.on('end', () => c(false));
-	});
-}
+// 		stream.on('error', e);
+// 		stream.on('end', () => c(false));
+// 	});
+// }
 
 export function readBytes(stream: Readable, bytes: number): Promise<Buffer> {
 	return new Promise<Buffer>((complete, error) => {

@@ -78,7 +78,7 @@ export class Ewm {
     /**
      * Retrieves a file from the specified workspace and component, and writes it to the given output URI.
      *
-     * @param sourceFile - The EWM repository path of the source file to retrieve.
+     * @param sourceFile - The EWM repository path of the source file to retrieve. The path should not contain Workspace and Component.
      * @param component - The name of the component containing the file.
      * @param workspace - The name of the workspace containing the component.
      * @param outUri - The URI where the retrieved file should be written.

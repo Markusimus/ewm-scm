@@ -411,15 +411,15 @@ export class Resource implements SourceControlResourceState {
 		this._rightUri = Uri.joinPath(this._componentRootUri, repositoryFilePathStripped);
 		
 		// Add component name to the path if not present.
-		let repositoryPathWithComponent = this._resourceUri.path;
-		if ( !repositoryPathWithComponent.startsWith( '/' + this._componentName ) )
-		{
-			repositoryPathWithComponent = '/' + this._componentName + repositoryPathWithComponent;
-		}
+		// let repositoryPathWithComponent = this._resourceUri.path;
+		// if ( !repositoryPathWithComponent.startsWith( '/' + this._componentName ) )
+		// {
+		// 	repositoryPathWithComponent = '/' + this._componentName + repositoryPathWithComponent;
+		// }
 
 		if( this._type === Status.MODIFIED )
 		{
-			this._leftUri = Uri.parse(`${EWM_SCHEME}:${repositoryPathWithComponent}`);
+			this._leftUri = Uri.parse(`${EWM_SCHEME}:${this._resourceUri.path}`);
 		}
 		
 	 }

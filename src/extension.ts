@@ -10,6 +10,7 @@ let ewmDocumentContentProvider: EwmDocumentContentProvider;
 let rootPath: vscode.Uri | undefined;
 let ewmSourceControls: Map<string, EwmRepository> = new Map();
 const outputChannel = vscode.window.createOutputChannel("EWM");
+let initDone = false;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -39,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
 				await ewmSourceControl.status();
 			}
 		} else {
-			vscode.window.showWarningMessage('No workspace open');
+			vscode.window.showWarningMessage('No workspace open (update)');
 		}
 	});
 	context.subscriptions.push(disposableUpdate);
@@ -51,9 +52,10 @@ export function activate(context: vscode.ExtensionContext) {
 	// 		}
 	// 	}));
 
+
 	let autoInit = vscode.workspace.getConfiguration('ewm-scm').get('autoInit', true);
 
-	if (rootPath && autoInit && vscode.workspace.getWorkspaceFolder(rootPath)) {
+	if (!initDone && rootPath && autoInit && vscode.workspace.getWorkspaceFolder(rootPath)) {
 		initEwm(context);
 	}
 
@@ -62,12 +64,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 async function initEwm(context: vscode.ExtensionContext) {
 
+	if (initDone){
+		return;
+	}
+
 	if (rootPath) {
+		initDone = true;
 		const ewm = new Ewm(rootPath, outputChannel);
 		const sandbox = await ewm.getSandbox();
 
 		// Go through the sandbox and init components.
-		if (sandbox) {
+		if (sandbox) {			
 			const activeWorkspaceFolder = vscode.workspace.getWorkspaceFolder(rootPath);
 			if (activeWorkspaceFolder) {
 				ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, sandbox.shares[0].remote.workspace.name, activeWorkspaceFolder.uri);
@@ -88,7 +95,7 @@ async function initEwm(context: vscode.ExtensionContext) {
 			vscode.window.showWarningMessage('No EWM sandbox found');
 		}
 	} else {
-		vscode.window.showWarningMessage('No workspace open');
+		vscode.window.showWarningMessage('No workspace open (Init)');
 	}
 
 }
