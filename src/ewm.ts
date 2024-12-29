@@ -40,7 +40,7 @@ export class Ewm {
         return new Promise<string>((resolve, reject) => {
             exec(commandToExecute, exOptions ,(error, stdout, stderr) => {
                 if (error) {
-                    this.showError('Error running command', error);
+                    // this.showError('Error running command', error);
                     reject(error);
                     return;
                 }
@@ -70,7 +70,7 @@ export class Ewm {
             
         } catch (error) {
 
-            this.showError('Could not read file', error);
+            this.showError('Could show sandbox', error);
         }
         return jsonSandbox;
     }
@@ -86,14 +86,18 @@ export class Ewm {
      *
      * @throws Will show an error message and reject the promise if the command execution fails.
      */
-    public async getFile(sourceFile: string, component: string, workspace: string, outUri: vscode.Uri): Promise<void> {
+    public async getFile(sourceFile: string, component: string, workspace: string, outUri: vscode.Uri): Promise<boolean> {
         const fullCommand = `get file -w "${workspace}" -c "${component}" -f "${sourceFile}" ${outUri.fsPath}`;
+        let success = true;
         try {
             await this.execLscm(fullCommand);
             this.outputChannel.appendLine(`File retrieved: ${sourceFile}`);
         } catch (error) {
-            this.showError('Could not retrieve file', error);
+            success = false;
+            // this.showError('Could not retrieve file', error);
         }
+
+        return success;
     }
 
     /**
@@ -137,7 +141,7 @@ export class Ewm {
             }
 
         } catch (e) {
-            this.showError('Could not read file', e);
+            this.showError('Could show status', e);
         }
         return retStatus;
     }

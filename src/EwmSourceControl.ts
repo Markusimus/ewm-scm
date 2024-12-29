@@ -2,39 +2,55 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto'; // Import the Node.js crypto module
 import * as fs from 'fs';
 import {statusOut} from './status';
-import { StatusDataI, ComponentI, ChangesetI, ChangeI, UnresolvedChangeI, WorkspaceI}  from './ewmStatusInterface';
+import { StatusDataI, ComponentI, ChangesetI, ChangeI, WorkspaceI}  from './ewmStatusInterface';
 import { EwmShareI } from './ewmSandboxInterface';
 import { Ewm } from './ewm';
 import os from 'os';
 import * as path from 'path';
 import { debounce, memoize, throttle } from './decorators';
 import { Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource } from 'vscode';
+import { url } from 'inspector';
 
 export const CONFIGURATION_FILE = '.jsewm';
 export const EWM_SCHEME = 'ewm';
 
 export const enum Status {
-	INDEX_MODIFIED,
-	INDEX_ADDED,
-	INDEX_DELETED,
-	INDEX_RENAMED,
-	INDEX_COPIED,
+	// "add": true,
+	// "conflict": false,
+	// "content_change": false,
+	// "delete": false,
+	// "move": false,
+	// "potential_conflict": false,
+	// "property_change": false
 
+	ADDED,
+	CONFLICT,
 	MODIFIED,
 	DELETED,
-	UNTRACKED,
-	IGNORED,
-	INTENT_TO_ADD,
-	INTENT_TO_RENAME,
-	TYPE_CHANGED,
+	MOVE,
+	POTENTIAL_CONFLICT,
+	PROPERTY_CHANGE
+	// INDEX_MODIFIED,
+	// INDEX_ADDED,
+	// INDEX_DELETED,
+	// INDEX_RENAMED,
+	// INDEX_COPIED,
 
-	ADDED_BY_US,
-	ADDED_BY_THEM,
-	DELETED_BY_US,
-	DELETED_BY_THEM,
-	BOTH_ADDED,
-	BOTH_DELETED,
-	BOTH_MODIFIED
+	// MODIFIED,
+	// DELETED,
+	// UNTRACKED,
+	// IGNORED,
+	// INTENT_TO_ADD,
+	// INTENT_TO_RENAME,
+	// TYPE_CHANGED,
+
+	// ADDED_BY_US,
+	// ADDED_BY_THEM,
+	// DELETED_BY_US,
+	// DELETED_BY_THEM,
+	// BOTH_ADDED,
+	// BOTH_DELETED,
+	// BOTH_MODIFIED
 }
 
 export const enum ResourceGroupType {
@@ -104,11 +120,6 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		this._incommingGroup = this._sourceControl.createResourceGroup('incoming', 'Incoming Changes');
 		this._outgoingGroup = this._sourceControl.createResourceGroup('outgoing', 'Outgoing Changes');
 		this._unresolvedGroup = this._sourceControl.createResourceGroup('unresolved', 'Unresolved Changes');
-    
-        // const fileSystemWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspaceFolder, "*.*"));
-		// fileSystemWatcher.onDidChange(uri => this.onResourceChange(uri), context.subscriptions);
-		// fileSystemWatcher.onDidCreate(uri => this.onResourceChange(uri), context.subscriptions);
-		// fileSystemWatcher.onDidDelete(uri => this.onResourceChange(uri), context.subscriptions);
 
         context.subscriptions.push(this._sourceControl);
         // context.subscriptions.push(fileSystemWatcher);
@@ -266,7 +277,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			if (incommingChanges) {
 				for (const changeSet of incommingChanges) {
 					for (const change of changeSet.changes) {
-						incommingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incomming, Uri.file(change.path), Status.MODIFIED, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+						incommingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incomming, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
 					}
 				}
 			}
@@ -275,7 +286,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			if (outgoingChanges) {
 				for (const changeSet of outgoingChanges) {
 					for (const change of changeSet.changes) {
-						outgoingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Outgoing, Uri.file(change.path), Status.MODIFIED, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+						outgoingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Outgoing, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
 					}
 				}
 			}
@@ -283,7 +294,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			// Update unresolved Changes
 			if (unresolvedChanges) {
 				for (const change of unresolvedChanges) {
-					unresolvedGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Unresolved, Uri.file(change.path), Status.MODIFIED, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+					unresolvedGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Unresolved, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
 				}
 			}
 		}
@@ -314,8 +325,8 @@ class ResourceCommandResolver {
 		const title = this.getTitle(resource);
 
 		if (!resource.leftUri) {
-			const bothModified = resource.type === Status.BOTH_MODIFIED;
-			if (resource.rightUri && workspace.getConfiguration('ewm-scm').get<boolean>('mergeEditor', false) && (bothModified || resource.type === Status.BOTH_ADDED)) {
+			const bothModified = resource.type === Status.CONFLICT;
+			if (resource.rightUri && workspace.getConfiguration('ewm-scm').get<boolean>('mergeEditor', false)) {
 				return {
 					command: 'git.openMergeEditor',
 					title: l10n.t('Open Merge'),
@@ -342,36 +353,14 @@ class ResourceCommandResolver {
 		const basename = path.basename(resource.resourceUri.fsPath);
 
 		switch (resource.type) {
-			case Status.INDEX_MODIFIED:
-			case Status.INDEX_RENAMED:
-			case Status.INDEX_ADDED:
-				return l10n.t('{0} (Index)', basename);
-
 			case Status.MODIFIED:
-			case Status.BOTH_ADDED:
-			case Status.BOTH_MODIFIED:
-				return l10n.t('{0} (Working Tree)', basename);
-
-			case Status.INDEX_DELETED:
+				return l10n.t('{0} (Modified)', basename);
 			case Status.DELETED:
 				return l10n.t('{0} (Deleted)', basename);
-
-			case Status.DELETED_BY_US:
-				return l10n.t('{0} (Theirs)', basename);
-
-			case Status.DELETED_BY_THEM:
-				return l10n.t('{0} (Ours)', basename);
-
-			case Status.UNTRACKED:
-				return l10n.t('{0} (Untracked)', basename);
-
-			case Status.INTENT_TO_ADD:
-			case Status.INTENT_TO_RENAME:
-				return l10n.t('{0} (Intent to add)', basename);
-
-			case Status.TYPE_CHANGED:
-				return l10n.t('{0} (Type changed)', basename);
-
+			case Status.ADDED:
+				return l10n.t('{0} (Added)', basename);
+			case Status.PROPERTY_CHANGE:
+				return l10n.t('{0} (Property changed)', basename);
 			default:
 				return '';
 		}
@@ -384,18 +373,29 @@ export class Resource implements SourceControlResourceState {
 	
 	private _leftUri?: Uri;		// The repository URI of the resource
 	private _rightUri?: Uri; 	// The Local workspace URI of the resource
+	private _resourceUri: Uri;
+	private _type: Status;
 
 	constructor(
 		private _commandResolver: ResourceCommandResolver,
 		private _resourceGroupType: ResourceGroupType,
-		private _resourceUri: Uri,
-		private _type: Status,
+		private _change: ChangeI,
 		private _useIcons: boolean,
 		private _workspaceName: string,
 		private _componentName: string,
 		private _componentRootUri: Uri,
 		private _renameResourceUri?: Uri,		
 	) { 
+		this._resourceUri = Uri.file(_change.path);
+		this._type = Status.MODIFIED;
+		if (_change.state.content_change) { this._type = Status.MODIFIED; }
+		if (_change.state.add) { this._type = Status.ADDED; }
+		if (_change.state.delete) { this._type = Status.DELETED; }
+		if (_change.state.move) { this._type = Status.MOVE; }
+		if (_change.state.property_change) { this._type = Status.PROPERTY_CHANGE; }
+		if (_change.state.potential_conflict) { this._type = Status.POTENTIAL_CONFLICT; }
+
+
 		let repositoryFilePathStripped = this._resourceUri.path;
 		// Remove first folder from repositoryFilePath path.
 		if ( repositoryFilePathStripped.startsWith( '/' + this._workspaceName ) )
@@ -416,40 +416,27 @@ export class Resource implements SourceControlResourceState {
 		{
 			repositoryPathWithComponent = '/' + this._componentName + repositoryPathWithComponent;
 		}
-		this._leftUri = Uri.parse(`${EWM_SCHEME}:${repositoryPathWithComponent}`);
+
+		if( this._type === Status.MODIFIED )
+		{
+			this._leftUri = Uri.parse(`${EWM_SCHEME}:${repositoryPathWithComponent}`);
+		}
+		
 	 }
 
 	static getStatusLetter(type: Status): string {
 		switch (type) {
-			case Status.INDEX_MODIFIED:
 			case Status.MODIFIED:
 				return 'M';
-			case Status.INDEX_ADDED:
-			case Status.INTENT_TO_ADD:
+			case Status.ADDED:
 				return 'A';
-			case Status.INDEX_DELETED:
 			case Status.DELETED:
 				return 'D';
-			case Status.INDEX_RENAMED:
-			case Status.INTENT_TO_RENAME:
+			case Status.MOVE: // Renamed
 				return 'R';
-			case Status.TYPE_CHANGED:
-				return 'T';
-			case Status.UNTRACKED:
-				return 'U';
-			case Status.IGNORED:
-				return 'I';
-			case Status.DELETED_BY_THEM:
-				return 'D';
-			case Status.DELETED_BY_US:
-				return 'D';
-			case Status.INDEX_COPIED:
-				return 'C';
-			case Status.BOTH_DELETED:
-			case Status.ADDED_BY_US:
-			case Status.ADDED_BY_THEM:
-			case Status.BOTH_ADDED:
-			case Status.BOTH_MODIFIED:
+			case Status.PROPERTY_CHANGE:
+				return 'P';
+			case Status.CONFLICT:
 				return '!'; // Using ! instead of ⚠, because the latter looks really bad on windows
 			default:
 				throw new Error('Unknown git status: ' + type);
@@ -458,25 +445,14 @@ export class Resource implements SourceControlResourceState {
 
 	static getStatusText(type: Status) {
 		switch (type) {
-			case Status.INDEX_MODIFIED: return 'Index Modified';
 			case Status.MODIFIED: return 'Modified';
-			case Status.INDEX_ADDED: return 'Index Added';
-			case Status.INDEX_DELETED: return 'Index Deleted';
 			case Status.DELETED: return 'Deleted';
-			case Status.INDEX_RENAMED: return 'Index Renamed';
-			case Status.INDEX_COPIED: return 'Index Copied';
-			case Status.UNTRACKED: return 'Untracked';
-			case Status.IGNORED: return 'Ignored';
-			case Status.INTENT_TO_ADD: return 'Intent to Add';
-			case Status.INTENT_TO_RENAME: return 'Intent to Rename';
-			case Status.TYPE_CHANGED: return 'Type Changed';
-			case Status.BOTH_DELETED: return 'Conflict: Both Deleted';
-			case Status.ADDED_BY_US: return 'Conflict: Added By Us';
-			case Status.DELETED_BY_THEM: return 'Conflict: Deleted By Them';
-			case Status.ADDED_BY_THEM: return 'Conflict: Added By Them';
-			case Status.DELETED_BY_US: return 'Conflict: Deleted By Us';
-			case Status.BOTH_ADDED: return 'Conflict: Both Added';
-			case Status.BOTH_MODIFIED: return 'Conflict: Both Modified';
+			case Status.ADDED: return 'Intent to Add';
+			case Status.PROPERTY_CHANGE: return 'Property Changed';
+			case Status.DELETED: return 'Deleted';
+			case Status.CONFLICT: return 'Conflict';
+			case Status.MOVE: return 'Item Moved/Renamed';
+			case Status.POTENTIAL_CONFLICT: return 'Potential Conflict';
 			default: return '';
 		}
 	}
@@ -508,25 +484,13 @@ export class Resource implements SourceControlResourceState {
 
 	private getIconPath(theme: string): Uri {
 		switch (this.type) {
-			case Status.INDEX_MODIFIED: return Resource.Icons[theme].Modified;
 			case Status.MODIFIED: return Resource.Icons[theme].Modified;
-			case Status.INDEX_ADDED: return Resource.Icons[theme].Added;
-			case Status.INDEX_DELETED: return Resource.Icons[theme].Deleted;
+			case Status.ADDED: return Resource.Icons[theme].Added;
 			case Status.DELETED: return Resource.Icons[theme].Deleted;
-			case Status.INDEX_RENAMED: return Resource.Icons[theme].Renamed;
-			case Status.INDEX_COPIED: return Resource.Icons[theme].Copied;
-			case Status.UNTRACKED: return Resource.Icons[theme].Untracked;
-			case Status.IGNORED: return Resource.Icons[theme].Ignored;
-			case Status.INTENT_TO_ADD: return Resource.Icons[theme].Added;
-			case Status.INTENT_TO_RENAME: return Resource.Icons[theme].Renamed;
-			case Status.TYPE_CHANGED: return Resource.Icons[theme].TypeChanged;
-			case Status.BOTH_DELETED: return Resource.Icons[theme].Conflict;
-			case Status.ADDED_BY_US: return Resource.Icons[theme].Conflict;
-			case Status.DELETED_BY_THEM: return Resource.Icons[theme].Conflict;
-			case Status.ADDED_BY_THEM: return Resource.Icons[theme].Conflict;
-			case Status.DELETED_BY_US: return Resource.Icons[theme].Conflict;
-			case Status.BOTH_ADDED: return Resource.Icons[theme].Conflict;
-			case Status.BOTH_MODIFIED: return Resource.Icons[theme].Conflict;
+			case Status.MOVE: return Resource.Icons[theme].Renamed;
+			case Status.PROPERTY_CHANGE: return Resource.Icons[theme].TypeChanged;
+			case Status.CONFLICT: return Resource.Icons[theme].Conflict;			
+			case Status.POTENTIAL_CONFLICT: return Resource.Icons[theme].Conflict;
 			default: throw new Error('Unknown git status: ' + this.type);
 		}
 	}
@@ -542,6 +506,7 @@ export class Resource implements SourceControlResourceState {
 	}
 
 	get type(): Status { return this._type; }
+	get resourceGroupType(): ResourceGroupType { return this._resourceGroupType; }
 
 	private get tooltip(): string {
 		return Resource.getStatusText(this.type);
@@ -550,10 +515,6 @@ export class Resource implements SourceControlResourceState {
 	private get strikeThrough(): boolean {
 		switch (this.type) {
 			case Status.DELETED:
-			case Status.BOTH_DELETED:
-			case Status.DELETED_BY_THEM:
-			case Status.DELETED_BY_US:
-			case Status.INDEX_DELETED:
 				return true;
 			default:
 				return false;
@@ -592,7 +553,7 @@ export class Resource implements SourceControlResourceState {
 	}
 
 	clone(resourceGroupType?: ResourceGroupType) {
-		return new Resource(this._commandResolver, resourceGroupType ?? this._resourceGroupType, this._resourceUri, this._type, this._useIcons, this._workspaceName, this._componentName, this._componentRootUri, this._renameResourceUri);
+		return new Resource(this._commandResolver, resourceGroupType ?? this._resourceGroupType, this._change, this._useIcons, this._workspaceName, this._componentName, this._componentRootUri, this._renameResourceUri);
 	}
 }
 
@@ -663,27 +624,42 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		// Get Temporary directory of the operating system.
 		const systemTempDir = Uri.file(os.tmpdir());
 		const tempFileName = crypto.randomBytes(16).toString("hex");
-		const tempFileUri = Uri.joinPath(systemTempDir, tempFileName);
+		let tempFileUri = Uri.joinPath(systemTempDir, tempFileName);
 		console.log(`doc uri: ${docUri}  componentName: ${componentName} workspaceName: ${this.workspaceName}`);
-		this.ewm.getFile(docUri, componentName, this.workspaceName, tempFileUri).then(() => {
-            // Code to execute after the file is downloaded
-            console.log(`File ${docUri} has been downloaded to ${tempFileUri.path}`);
-			// Check if file exist or not.
-			if (!fs.existsSync(tempFileUri.fsPath)) {
-				return "Resource not found: " + tempFileUri.toString();
+
+		this.ewm.getFile(docUri, componentName, this.workspaceName, tempFileUri).then((success) => {
+			if (success) {
+				if (!fs.existsSync(tempFileUri.fsPath)) {
+					console.error(`Resource not found: ${tempFileUri.fsPath}:`);
+					return "";
+				}
+	
+				// Open and read content of the file
+				const fileContent = fs.readFileSync(tempFileUri.fsPath, 'utf-8');
+				this.loadedFiles.set(relativeUri, fileContent);
+				// Remove the temp file after reading the content.
+				fs.unlinkSync(tempFileUri.fsPath);
+				this._onDidChange.fire(uri);
+				
+			}
+			else {
+				if (!fs.existsSync(uri.fsPath)) {
+					console.error(`Resource not found: ${tempFileUri.fsPath}:`);
+					return "";
+				}
+				const localFileContent = fs.readFileSync(uri.fsPath, 'utf-8');
+				this.loadedFiles.set(relativeUri, localFileContent);
+				this._onDidChange.fire(uri);
 			}
 
-			// Open and read content of the file
-			const fileContent = fs.readFileSync(tempFileUri.fsPath, 'utf-8');
-			this.loadedFiles.set(relativeUri, fileContent);
-			// Remove the temp file after reading the content.
-			fs.unlinkSync(tempFileUri.fsPath);
-			this._onDidChange.fire(uri);
-        }).catch((error) => {
-            // Handle any errors that occur during the execution
-            console.error(`Failed to download file ${docUri}:`, error);
-        });
+			}).catch((error) => {
+				// Handle any errors that occur during the execution
+				console.error(`Failed to download file ${docUri}:`, error);
+			});
 
-		return "Downloading file...";
+		// TODO: Return the content of the local file.
+		// const localFileContent = fs.readFileSync(uri.fsPath, 'utf-8');
+		return "";
+		// return "Downloading file...";
 	}
 }
