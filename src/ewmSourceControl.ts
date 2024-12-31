@@ -1,18 +1,19 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto'; // Import the Node.js crypto module
 import * as fs from 'fs';
-import {statusOut} from './status';
 import { StatusDataI, ComponentI, ChangesetI, ChangeI, WorkspaceI}  from './ewmStatusInterface';
 import { EwmShareI } from './ewmSandboxInterface';
 import { Ewm } from './ewm';
 import os from 'os';
 import * as path from 'path';
 import { debounce, memoize, throttle } from './decorators';
-import { Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource } from 'vscode';
-import { url } from 'inspector';
+import { Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource, FileDecoration, ThemeColor } from 'vscode';
+
 
 export const CONFIGURATION_FILE = '.jsewm';
 export const EWM_SCHEME = 'ewm';
+
+export type State = 'uninitialized' | 'initialized';
 
 export const enum Status {
 	// "add": true,
@@ -97,6 +98,10 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 
 	get componentRootUri(): Uri {
 		return this._componentRootUri;
+	}
+
+	get root(): string {
+		return this._componentRootUri.path;
 	}
 
     private timeout?: NodeJS.Timeout;
@@ -447,7 +452,7 @@ export class Resource implements SourceControlResourceState {
 		switch (type) {
 			case Status.MODIFIED: return 'Modified';
 			case Status.DELETED: return 'Deleted';
-			case Status.ADDED: return 'Intent to Add';
+			case Status.ADDED: return 'Add';
 			case Status.PROPERTY_CHANGE: return 'Property Changed';
 			case Status.DELETED: return 'Deleted';
 			case Status.CONFLICT: return 'Conflict';
@@ -482,6 +487,39 @@ export class Resource implements SourceControlResourceState {
 		}
 	};
 
+	static getStatusColor(type: Status): ThemeColor {
+		switch (type) {
+			case Status.MODIFIED:
+			// case Status.TYPE_CHANGED:
+				return new ThemeColor('gitDecoration.modifiedResourceForeground');
+			// case Status.INDEX_DELETED:
+			// 	return new ThemeColor('gitDecoration.stageDeletedResourceForeground');
+			case Status.DELETED:
+				return new ThemeColor('gitDecoration.deletedResourceForeground');
+			case Status.ADDED:
+			// case Status.INTENT_TO_ADD:
+				return new ThemeColor('gitDecoration.addedResourceForeground');
+			case Status.MOVE:
+			// case Status.INDEX_RENAMED:
+			// case Status.INTENT_TO_RENAME:
+				return new ThemeColor('gitDecoration.renamedResourceForeground');
+			// case Status.UNTRACKED:
+			// 	return new ThemeColor('gitDecoration.untrackedResourceForeground');
+			// case Status.IGNORED:
+			// 	return new ThemeColor('gitDecoration.ignoredResourceForeground');
+			// case Status.BOTH_DELETED:
+			// case Status.ADDED_BY_US:
+			// case Status.DELETED_BY_THEM:
+			// case Status.ADDED_BY_THEM:
+			// case Status.DELETED_BY_US:
+			// case Status.BOTH_ADDED:
+			case Status.CONFLICT:
+				return new ThemeColor('gitDecoration.conflictingResourceForeground');
+			default:
+				throw new Error('Unknown git status: ' + type);
+		}
+	}
+
 	private getIconPath(theme: string): Uri {
 		switch (this.type) {
 			case Status.MODIFIED: return Resource.Icons[theme].Modified;
@@ -495,6 +533,8 @@ export class Resource implements SourceControlResourceState {
 		}
 	}
 
+	get original(): Uri { return this._resourceUri; }
+
 	// The repository URI of the resource
 	get leftUri(): Uri | undefined {
 		return this._leftUri;
@@ -507,6 +547,20 @@ export class Resource implements SourceControlResourceState {
 
 	get type(): Status { return this._type; }
 	get resourceGroupType(): ResourceGroupType { return this._resourceGroupType; }
+
+	get letter(): string {
+		return Resource.getStatusLetter(this.type);
+	}
+
+	get color(): ThemeColor {
+		return Resource.getStatusColor(this.type);
+	}
+
+	get resourceDecoration(): FileDecoration {
+		const res = new FileDecoration(this.letter, this.tooltip, this.color);
+		res.propagate = this.type !== Status.DELETED;
+		return res;
+	}
 
 	private get tooltip(): string {
 		return Resource.getStatusText(this.type);
@@ -543,6 +597,16 @@ export class Resource implements SourceControlResourceState {
 		return this._commandResolver.resolveDefaultCommand(this);
 	}
 
+	/**
+	 * Gets the decorations for the source control resource.
+	 * 
+	 * @returns {SourceControlResourceDecorations} An object containing the following properties:
+	 * - `strikeThrough`: A boolean indicating whether the text should be struck through.
+	 * - `faded`: A boolean indicating whether the text should be faded.
+	 * - `tooltip`: A string containing the tooltip text.
+	 * - `light`: An optional object containing the icon path for light themes.
+	 * - `dark`: An optional object containing the icon path for dark themes.
+	 */
 	get decorations(): SourceControlResourceDecorations {
 		const light = this._useIcons ? { iconPath: this.getIconPath('light') } : undefined;
 		const dark = this._useIcons ? { iconPath: this.getIconPath('dark') } : undefined;

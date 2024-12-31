@@ -119,23 +119,23 @@ export class Ewm {
             if (jsonStatus.hasOwnProperty("workspaces")) {
                 retStatus = jsonStatus;
                 // Loop through all workspaces.
-                for (const workspaceIndex in jsonStatus.workspaces) {
-                    // Check if "incomming" is in the workspace.
-                    if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("name")) {
-                        const name = jsonStatus.workspaces[workspaceIndex].name;
-                        this.outputChannel.appendLine("WorkSpaceName: " + name);
-                    }
+                // for (const workspaceIndex in jsonStatus.workspaces) {
+                //     // Check if "incomming" is in the workspace.
+                //     if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("name")) {
+                //         const name = jsonStatus.workspaces[workspaceIndex].name;
+                //         this.outputChannel.appendLine("WorkSpaceName: " + name);
+                //     }
 
-                    if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("components")) {
-                        const components = jsonStatus.workspaces[workspaceIndex].components;
-                        for (const componentIndex in components) {
-                            if (components[componentIndex].hasOwnProperty("name")) {
-                                const name = components[componentIndex].name;
-                                this.outputChannel.appendLine("  ComponentName: " + name);
-                            }
-                        }
-                    }
-                }
+                //     if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("components")) {
+                //         const components = jsonStatus.workspaces[workspaceIndex].components;
+                //         for (const componentIndex in components) {
+                //             if (components[componentIndex].hasOwnProperty("name")) {
+                //                 const name = components[componentIndex].name;
+                //                 this.outputChannel.appendLine("  ComponentName: " + name);
+                //             }
+                //         }
+                //     }
+                // }
             } else {
                 this.outputChannel.appendLine("json has no workspaces");
             }
