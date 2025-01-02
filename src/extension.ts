@@ -38,11 +38,6 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(disposable);
 
-	const disposableUpdate = vscode.commands.registerCommand('ewm-scm.ewmUpdate', async () => {
-		model.updateStatus();
-	});
-	context.subscriptions.push(disposableUpdate);
-
 	// context.subscriptions.push(vscode.commands.registerCommand("ewm-scm.checkin",
 	// 	async (...resourceStates: vscode.SourceControlResourceState[]) => {
 	// 		if (rootPath) {

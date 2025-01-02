@@ -3,30 +3,30 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { window, workspace, Uri, Disposable, Event, EventEmitter, FileDecoration, FileDecorationProvider, ThemeColor, l10n } from 'vscode';
-// import * as path from 'path';
-import { EwmRepository, EwmResourceGroup, Status } from './ewmSourceControl';
+import { window, workspace, Uri, Disposable, Event, EventEmitter, FileDecoration, FileDecorationProvider, ThemeColor, l10n, SourceControlHistoryItemRef } from 'vscode';
+import * as path from 'path';
+import { EwmRepository as Repository, EwmResourceGroup, Status } from './ewmSourceControl';
 import { Model } from './model';
-// import { debounce } from './decorators';
+import { debounce } from './decorators';
 import { filterEvent, dispose, anyEvent, fireEvent, PromiseSource, combinedDisposable, runAndSubscribeEvent } from './util';
 // import { Change, GitErrorCodes, Status } from './api/git';
 
-// function equalSourceControlHistoryItemRefs(ref1?: SourceControlHistoryItemRef, ref2?: SourceControlHistoryItemRef): boolean {
-// 	if (ref1 === ref2) {
-// 		return true;
-// 	}
+function equalSourceControlHistoryItemRefs(ref1?: SourceControlHistoryItemRef, ref2?: SourceControlHistoryItemRef): boolean {
+	if (ref1 === ref2) {
+		return true;
+	}
 
-// 	return ref1?.id === ref2?.id &&
-// 		ref1?.name === ref2?.name &&
-// 		ref1?.revision === ref2?.revision;
-// }
+	return ref1?.id === ref2?.id &&
+		ref1?.name === ref2?.name &&
+		ref1?.revision === ref2?.revision;
+}
 
 // class GitIgnoreDecorationProvider implements FileDecorationProvider {
 
 // 	private static Decoration: FileDecoration = { color: new ThemeColor('gitDecoration.ignoredResourceForeground') };
 
 // 	readonly onDidChangeFileDecorations: Event<Uri[]>;
-// 	private queue = new Map<string, { repository: EwmRepository; queue: Map<string, PromiseSource<FileDecoration | undefined>> }>();
+// 	private queue = new Map<string, { repository: Repository; queue: Map<string, PromiseSource<FileDecoration | undefined>> }>();
 // 	private disposables: Disposable[] = [];
 
 // 	constructor(private model: Model) {
@@ -108,7 +108,7 @@ class EwmDecorationProvider implements FileDecorationProvider {
 	private disposables: Disposable[] = [];
 	private decorations = new Map<string, FileDecoration>();
 
-	constructor(private repository: EwmRepository) {
+	constructor(private repository: Repository) {
 		this.disposables.push(
 			window.registerFileDecorationProvider(this),
 			runAndSubscribeEvent(repository.onDidRunGitStatus, () => this.onDidRunGitStatus())
@@ -118,11 +118,11 @@ class EwmDecorationProvider implements FileDecorationProvider {
 	private onDidRunGitStatus(): void {
 		const newDecorations = new Map<string, FileDecoration>();
 
+		// this.collectSubmoduleDecorationData(newDecorations);
 		this.collectDecorationData(this.repository.incommingGroup, newDecorations);
 		this.collectDecorationData(this.repository.outgoingGroup, newDecorations);
 		this.collectDecorationData(this.repository.unresolvedGroup, newDecorations);
 		// this.collectDecorationData(this.repository.mergeGroup, newDecorations);
-		this.collectSubmoduleDecorationData(newDecorations);
 
 		const uris = new Set([...this.decorations.keys()].concat([...newDecorations.keys()]));
 		this.decorations = newDecorations;
@@ -148,12 +148,11 @@ class EwmDecorationProvider implements FileDecorationProvider {
 		}
 	}
 
-	private collectSubmoduleDecorationData(bucket: Map<string, FileDecoration>): void {
-		return;
-        // for (const submodule of this.repository.submodules) {
-		// 	bucket.set(Uri.file(path.join(this.repository.root, submodule.path)).toString(), GitDecorationProvider.SubmoduleDecorationData);
-		// }
-	}
+	// private collectSubmoduleDecorationData(bucket: Map<string, FileDecoration>): void {
+	// 	for (const submodule of this.repository.submodules) {
+	// 		bucket.set(Uri.file(path.join(this.repository.root, submodule.path)).toString(), GitDecorationProvider.SubmoduleDecorationData);
+	// 	}
+	// }
 
 	provideFileDecoration(uri: Uri): FileDecoration | undefined {
 		return this.decorations.get(uri.toString());
@@ -164,49 +163,49 @@ class EwmDecorationProvider implements FileDecorationProvider {
 	}
 }
 
-// class GitIncomingChangesFileDecorationProvider implements FileDecorationProvider {
+// class EwmIncomingChangesFileDecorationProvider implements FileDecorationProvider {
 
 // 	private readonly _onDidChangeDecorations = new EventEmitter<Uri[]>();
 // 	readonly onDidChangeFileDecorations: Event<Uri[]> = this._onDidChangeDecorations.event;
 
-// 	// private _currentHistoryItemRef: SourceControlHistoryItemRef | undefined;
-// 	// private _currentHistoryItemRemoteRef: SourceControlHistoryItemRef | undefined;
+// 	private _currentHistoryItemRef: SourceControlHistoryItemRef | undefined;
+// 	private _currentHistoryItemRemoteRef: SourceControlHistoryItemRef | undefined;
 
 // 	private _decorations = new Map<string, FileDecoration>();
 // 	private readonly disposables: Disposable[] = [];
 
-// 	constructor(private readonly repository: EwmRepository) {
+// 	constructor(private readonly repository: Repository) {
 // 		this.disposables.push(
 // 			window.registerFileDecorationProvider(this),
 // 			runAndSubscribeEvent(repository.historyProvider.onDidChangeCurrentHistoryItemRefs, () => this.onDidChangeCurrentHistoryItemRefs())
 // 		);
 // 	}
 
-// 	// private async onDidChangeCurrentHistoryItemRefs(): Promise<void> {
-// 	// 	const historyProvider = this.repository.historyProvider;
-// 	// 	const currentHistoryItemRef = historyProvider.currentHistoryItemRef;
-// 	// 	const currentHistoryItemRemoteRef = historyProvider.currentHistoryItemRemoteRef;
+// 	private async onDidChangeCurrentHistoryItemRefs(): Promise<void> {
+// 		const historyProvider = this.repository.historyProvider;
+// 		const currentHistoryItemRef = historyProvider.currentHistoryItemRef;
+// 		const currentHistoryItemRemoteRef = historyProvider.currentHistoryItemRemoteRef;
 
-// 	// 	if (equalSourceControlHistoryItemRefs(this._currentHistoryItemRef, currentHistoryItemRef) &&
-// 	// 		equalSourceControlHistoryItemRefs(this._currentHistoryItemRemoteRef, currentHistoryItemRemoteRef)) {
-// 	// 		return;
-// 	// 	}
+// 		if (equalSourceControlHistoryItemRefs(this._currentHistoryItemRef, currentHistoryItemRef) &&
+// 			equalSourceControlHistoryItemRefs(this._currentHistoryItemRemoteRef, currentHistoryItemRemoteRef)) {
+// 			return;
+// 		}
 
-// 	// 	const decorations = new Map<string, FileDecoration>();
-// 	// 	await this.collectIncomingChangesFileDecorations(decorations);
-// 	// 	const uris = new Set([...this._decorations.keys()].concat([...decorations.keys()]));
+// 		const decorations = new Map<string, FileDecoration>();
+// 		await this.collectIncomingChangesFileDecorations(decorations);
+// 		const uris = new Set([...this._decorations.keys()].concat([...decorations.keys()]));
 
-// 	// 	this._decorations = decorations;
-// 	// 	this._currentHistoryItemRef = currentHistoryItemRef;
-// 	// 	this._currentHistoryItemRemoteRef = currentHistoryItemRemoteRef;
+// 		this._decorations = decorations;
+// 		this._currentHistoryItemRef = currentHistoryItemRef;
+// 		this._currentHistoryItemRemoteRef = currentHistoryItemRemoteRef;
 
-// 	// 	this._onDidChangeDecorations.fire([...uris.values()].map(value => Uri.parse(value, true)));
-// 	// }
+// 		this._onDidChangeDecorations.fire([...uris.values()].map(value => Uri.parse(value, true)));
+// 	}
 
 // 	private async collectIncomingChangesFileDecorations(bucket: Map<string, FileDecoration>): Promise<void> {
 // 		for (const change of await this.getIncomingChanges()) {
 // 			switch (change.status) {
-// 				case Status.INDEX_ADDED:
+// 				case Status.ADDED:
 // 					bucket.set(change.uri.toString(), {
 // 						badge: '↓A',
 // 						tooltip: l10n.t('Incoming Changes (added)'),
@@ -218,7 +217,7 @@ class EwmDecorationProvider implements FileDecorationProvider {
 // 						tooltip: l10n.t('Incoming Changes (deleted)'),
 // 					});
 // 					break;
-// 				case Status.INDEX_RENAMED:
+// 				case Status.MOVE:
 // 					bucket.set(change.originalUri.toString(), {
 // 						badge: '↓R',
 // 						tooltip: l10n.t('Incoming Changes (renamed)'),
@@ -274,10 +273,9 @@ class EwmDecorationProvider implements FileDecorationProvider {
 
 export class EwmDecorations {
 
-	private enabled = false;
 	private disposables: Disposable[] = [];
 	private modelDisposables: Disposable[] = [];
-	private providers = new Map<EwmRepository, Disposable>();
+	private providers = new Map<Repository, Disposable>();
 
 	constructor(private model: Model) {
 		// this.disposables.push(new GitIgnoreDecorationProvider(model));
@@ -288,19 +286,13 @@ export class EwmDecorations {
 	}
 
 	private update(): void {
-		const config = workspace.getConfiguration('ewm-scm');
-		const enabled = config.get<boolean>('decorations.enabled', true) === true;
-		if (this.enabled === enabled) {
-			return;
-		}
+		const enabled = workspace.getConfiguration('ewm-scm').get('decorations.enabled', true);
 
 		if (enabled) {
 			this.enable();
 		} else {
 			this.disable();
 		}
-
-		this.enabled = enabled;
 	}
 
 	private enable(): void {
@@ -315,16 +307,16 @@ export class EwmDecorations {
 		this.providers.clear();
 	}
 
-	private onDidOpenRepository(repository: EwmRepository): void {
+	private onDidOpenRepository(repository: Repository): void {
 		const providers = combinedDisposable([
 			new EwmDecorationProvider(repository),
-			// new GitIncomingChangesFileDecorationProvider(repository)
+			// new EwmIncomingChangesFileDecorationProvider(repository)
 		]);
 
 		this.providers.set(repository, providers);
 	}
 
-	private onDidCloseRepository(repository: EwmRepository): void {
+	private onDidCloseRepository(repository: Repository): void {
 		const provider = this.providers.get(repository);
 
 		if (provider) {

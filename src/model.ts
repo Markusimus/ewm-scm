@@ -1,5 +1,5 @@
 import { EwmRepository, EwmDocumentContentProvider, EWM_SCHEME, State } from "./ewmSourceControl";
-import { Disposable, EventEmitter, Event, ExtensionContext, workspace, window, Uri, OutputChannel, commands, Memento } from "vscode";
+import { Disposable, EventEmitter, Event, ExtensionContext, workspace, window, Uri, OutputChannel, commands, Memento, SourceControlResourceState } from "vscode";
 import { Ewm } from './ewm';
 import { EwmShareI } from "./ewmSandboxInterface";
 
@@ -7,7 +7,17 @@ interface OpenRepository extends Disposable {
 	repository: EwmRepository;
 }
 
-export class Model {
+export interface ModelChangeEvent {
+	repository: EwmRepository;
+	uri: Uri;
+}
+
+export interface OriginalResourceChangeEvent {
+	repository: EwmRepository;
+	uri: Uri;
+}
+
+export class Model implements Disposable {
 
 	private _onDidOpenRepository = new EventEmitter<EwmRepository>();
 	readonly onDidOpenRepository: Event<EwmRepository> = this._onDidOpenRepository.event;
@@ -18,11 +28,11 @@ export class Model {
     private _onDidChangeState = new EventEmitter<State>();
 	readonly onDidChangeState = this._onDidChangeState.event;
 
-	// private _onDidChangeRepository = new EventEmitter<ModelChangeEvent>();
-	// readonly onDidChangeRepository: Event<ModelChangeEvent> = this._onDidChangeRepository.event;
+	private _onDidChangeRepository = new EventEmitter<ModelChangeEvent>();
+	readonly onDidChangeRepository: Event<ModelChangeEvent> = this._onDidChangeRepository.event;
 
-	// private _onDidChangeOriginalResource = new EventEmitter<OriginalResourceChangeEvent>();
-	// readonly onDidChangeOriginalResource: Event<OriginalResourceChangeEvent> = this._onDidChangeOriginalResource.event;
+	private _onDidChangeOriginalResource = new EventEmitter<OriginalResourceChangeEvent>();
+	readonly onDidChangeOriginalResource: Event<OriginalResourceChangeEvent> = this._onDidChangeOriginalResource.event;
 
     private openRepositories: OpenRepository[] = [];
 	get repositories(): EwmRepository[] { return this.openRepositories.map(r => r.repository); }
@@ -34,7 +44,7 @@ export class Model {
 
     private _initDone = false;
     private _rootPath: Uri | undefined;
-	private _disposables: Disposable[] = [];
+    private disposables: Disposable[] = [];
 	// private _repositories: Map<string, EwmRepository> = new Map();
 
 
@@ -52,6 +62,21 @@ export class Model {
 	}
 
     constructor(private context: ExtensionContext, private outputChannel: OutputChannel) {
+
+        // Register update command
+        const disposableUpdate = commands.registerCommand('ewm-scm.ewmUpdate', async () => {
+            this.updateStatus();
+        });
+        context.subscriptions.push(disposableUpdate);
+
+        // Register checkin command
+    	context.subscriptions.push(commands.registerCommand("ewm-scm.checkin",
+        	async (...resourceStates: SourceControlResourceState[]) => {
+                    const repository = this.repositories.find(r => (r.componentRootUri === resourceStates[0].resourceUri )); //  contains(resourceState.resourceUri));
+                    if (repository) {
+                        await repository.checkin(resourceStates);
+                    }
+        	}));
 
         this._rootPath =
             workspace.workspaceFolders && workspace.workspaceFolders.length > 0
@@ -156,15 +181,19 @@ export class Model {
             for (const openRepository of this.openRepositories) {
                 await openRepository.repository.status();
             }
-			// for (const [componentName, ewmSourceControl] of this._repositories.entries()) {
-			// 	await ewmSourceControl.status();
-			// }
 		} else {
 			window.showWarningMessage('No workspace open (update)');
 		}
     }
 
+    dispose(): void {
+		const openRepositories = [...this.openRepositories];
+		openRepositories.forEach(r => r.dispose());
+		this.openRepositories = [];
 
+		// this.possibleGitRepositoryPaths.clear();
+		// this.disposables = dispose(this.disposables);
+	}
 }
 
 class ClosedRepositoriesManager {
