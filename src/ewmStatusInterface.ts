@@ -18,6 +18,18 @@ export interface ChangeI {
     uuid: string;
 }
 
+// export interface UnresolvedChangeI {
+//     path: string;
+//     state: {
+//         add: boolean;
+//         content_change: boolean;
+//         delete: boolean;
+//         move: boolean;
+//         property_change: boolean;
+//     };
+//     uuid: string;
+// }
+
 
 export interface ChangesetI {
     author: string;
@@ -69,19 +81,6 @@ interface FlowTarget {
     userId?: string;
 }
 
-
-export interface UnresolvedChangeI {
-    path: string;
-    state: {
-        add: boolean;
-        content_change: boolean;
-        delete: boolean;
-        move: boolean;
-        property_change: boolean;
-    };
-    uuid: string;
-}
-
 export interface ComponentI {
     baseline: Baseline;
     "changesets-after-baseline": boolean;
@@ -104,11 +103,11 @@ export interface ComponentI {
     type: string | null;
     uuid: string;
     operation?: string;
-    unresolved?: UnresolvedChangeI[];
+    unresolved?: ChangeI[];
 }
 
 
-interface Workspace {
+export interface WorkspaceI {
     components: ComponentI[];
     "flow-target": FlowTarget;
     isTracked: string;
@@ -121,7 +120,7 @@ interface Workspace {
 
 
 export interface StatusDataI {
-    workspaces: Workspace[];
+    workspaces: WorkspaceI[];
 }
 
 export default StatusDataI;

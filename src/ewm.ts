@@ -1,14 +1,24 @@
 import * as vscode from 'vscode';
-import StatusDataI from './ewmStatusInterface';
+import {StatusDataI, WorkspaceI} from './ewmStatusInterface';
 import {EwmSandboxI} from './ewmSandboxInterface';
 import { exec, ExecOptions } from 'child_process';
 
+/**
+ * The `Ewm` class provides methods to interact with the EWM (Engineering Workflow Manager) system using the lscm commands.
+ * It allows executing commands, retrieving sandbox structures, files, and workspace statuses.
+ */
 export class Ewm {
     public version: string = "0";
 
     constructor( private rootPath: vscode.Uri, private outputChannel: vscode.OutputChannel) {
     };
 
+    /**
+     * Displays an error message to the user and logs the error to the console.
+     *
+     * @param message - The message to display to the user.
+     * @param error - The error object or message to log and display.
+     */
     private showError(message: string, error: any): void {
         vscode.window.showErrorMessage(`${message}: ${error.message || error}`);
         console.error(error);
@@ -30,7 +40,7 @@ export class Ewm {
         return new Promise<string>((resolve, reject) => {
             exec(commandToExecute, exOptions ,(error, stdout, stderr) => {
                 if (error) {
-                    this.showError('Error running command', error);
+                    // this.showError('Error running command', error);
                     reject(error);
                     return;
                 }
@@ -60,7 +70,7 @@ export class Ewm {
             
         } catch (error) {
 
-            this.showError('Could not read file', error);
+            this.showError('Could show sandbox', error);
         }
         return jsonSandbox;
     }
@@ -68,7 +78,7 @@ export class Ewm {
     /**
      * Retrieves a file from the specified workspace and component, and writes it to the given output URI.
      *
-     * @param sourceFile - The EWM repository path of the source file to retrieve.
+     * @param sourceFile - The EWM repository path of the source file to retrieve. The path should not contain Workspace and Component.
      * @param component - The name of the component containing the file.
      * @param workspace - The name of the workspace containing the component.
      * @param outUri - The URI where the retrieved file should be written.
@@ -76,14 +86,18 @@ export class Ewm {
      *
      * @throws Will show an error message and reject the promise if the command execution fails.
      */
-    public async getFile(sourceFile: string, component: string, workspace: string, outUri: vscode.Uri): Promise<void> {
+    public async getFile(sourceFile: string, component: string, workspace: string, outUri: vscode.Uri): Promise<boolean> {
         const fullCommand = `get file -w "${workspace}" -c "${component}" -f "${sourceFile}" ${outUri.fsPath}`;
+        let success = true;
         try {
             await this.execLscm(fullCommand);
             this.outputChannel.appendLine(`File retrieved: ${sourceFile}`);
         } catch (error) {
-            this.showError('Could not retrieve file', error);
+            success = false;
+            // this.showError('Could not retrieve file', error);
         }
+
+        return success;
     }
 
     /**
@@ -105,30 +119,55 @@ export class Ewm {
             if (jsonStatus.hasOwnProperty("workspaces")) {
                 retStatus = jsonStatus;
                 // Loop through all workspaces.
-                for (const workspaceIndex in jsonStatus.workspaces) {
-                    // Check if "incomming" is in the workspace.
-                    if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("name")) {
-                        const name = jsonStatus.workspaces[workspaceIndex].name;
-                        this.outputChannel.appendLine("WorkSpaceName: " + name);
-                    }
+                // for (const workspaceIndex in jsonStatus.workspaces) {
+                //     // Check if "incomming" is in the workspace.
+                //     if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("name")) {
+                //         const name = jsonStatus.workspaces[workspaceIndex].name;
+                //         this.outputChannel.appendLine("WorkSpaceName: " + name);
+                //     }
 
-                    if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("components")) {
-                        const components = jsonStatus.workspaces[workspaceIndex].components;
-                        for (const componentIndex in components) {
-                            if (components[componentIndex].hasOwnProperty("name")) {
-                                const name = components[componentIndex].name;
-                                this.outputChannel.appendLine("  ComponentName: " + name);
-                            }
-                        }
-                    }
-                }
+                //     if (jsonStatus.workspaces[workspaceIndex].hasOwnProperty("components")) {
+                //         const components = jsonStatus.workspaces[workspaceIndex].components;
+                //         for (const componentIndex in components) {
+                //             if (components[componentIndex].hasOwnProperty("name")) {
+                //                 const name = components[componentIndex].name;
+                //                 this.outputChannel.appendLine("  ComponentName: " + name);
+                //             }
+                //         }
+                //     }
+                // }
             } else {
                 this.outputChannel.appendLine("json has no workspaces");
             }
 
         } catch (e) {
-            this.showError('Could not read file', e);
+            this.showError('Could show status', e);
         }
         return retStatus;
+    }
+
+    /**
+     * Checks in a file with the provided file path.
+     *
+     * @param file - The URI of the file to check in.
+     * @returns A promise that resolves with the status data or rejects with an error.
+     *
+     * @throws Will show an error message and reject the promise if the command execution fails.
+     */
+    public async checkin(listOfFiles: vscode.Uri[]): Promise<WorkspaceI> {
+        let command = `checkin -j `;
+        for (const file of listOfFiles) {
+            command += ` "${file.fsPath}"`;
+        }
+        
+        let retValue: WorkspaceI = { } as WorkspaceI;
+        try {
+            let commandResponse = await this.execLscm(command);
+            retValue = (JSON.parse(commandResponse) as WorkspaceI[])[0];
+        } catch (e) {
+            this.showError('Could not check in file', e);
+        }
+
+        return retValue;
     }
 }
