@@ -1,13 +1,12 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { EwmRepository, EwmDocumentContentProvider, EWM_SCHEME } from './ewmSourceControl';
 import {Model} from './model';
 import { EwmDecorations } from './decorationProvider';
 // import { StatusDataI, WorkspaceI } from './ewmStatusInterface';
 // import { StartupSnapshotCallbackFn } from 'v8';
 
-let ewmDocumentContentProvider: EwmDocumentContentProvider;
+
 let rootPath: vscode.Uri | undefined;
 const outputChannel = vscode.window.createOutputChannel("EWM");
 let initDone = false;

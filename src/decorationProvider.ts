@@ -119,7 +119,7 @@ class EwmDecorationProvider implements FileDecorationProvider {
 		const newDecorations = new Map<string, FileDecoration>();
 
 		// this.collectSubmoduleDecorationData(newDecorations);
-		this.collectDecorationData(this.repository.incommingGroup, newDecorations);
+		this.collectDecorationData(this.repository.incomingGroup, newDecorations);
 		this.collectDecorationData(this.repository.outgoingGroup, newDecorations);
 		this.collectDecorationData(this.repository.unresolvedGroup, newDecorations);
 		// this.collectDecorationData(this.repository.mergeGroup, newDecorations);

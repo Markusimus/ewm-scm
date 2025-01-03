@@ -2,7 +2,7 @@
   "name": "ewm-scm",
 	"displayName": "vscode-EWM",
 	"description": "The SCM extension for Engineering Workflow Manger.",
-	"version": "0.0.6",
+	"version": "0.0.7",
   "license": "MIT",
 	"engines": {
     "vscode": "^1.96.0"

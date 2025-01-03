@@ -55,7 +55,7 @@ export const enum Status {
 }
 
 export const enum ResourceGroupType {
-	Incomming,
+	Incoming,
 	Outgoing,
 	Unresolved
 }
@@ -70,7 +70,7 @@ export interface EwmResourceGroup extends SourceControlResourceGroup {
 }
 
 interface EwmResourceGroups {
-	incommingGroup?: Resource[];
+	incomingGroup?: Resource[];
 	outgoingGroup?: Resource[];
 	unresolvedGroup?: Resource[];
 }
@@ -87,8 +87,8 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	private _onDidChangeStatus = new EventEmitter<void>();
 		readonly onDidRunGitStatus: Event<void> = this._onDidChangeStatus.event;
 
-	private _incommingGroup: SourceControlResourceGroup;
-	get incommingGroup(): EwmResourceGroup { return this._incommingGroup as EwmResourceGroup; }
+	private _incomingGroup: SourceControlResourceGroup;
+	get incomingGroup(): EwmResourceGroup { return this._incomingGroup as EwmResourceGroup; }
 
 	private _outgoingGroup: SourceControlResourceGroup;
 	get outgoingGroup(): EwmResourceGroup { return this._outgoingGroup as EwmResourceGroup; }
@@ -122,7 +122,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		this._sourceControl.acceptInputCommand = { command: 'ewm-scm.commit', title: 'Commit', arguments: [this._sourceControl] };
 		// this._sourceControl.inputBox.validateInput = this.validateInput.bind(this);
 
-		this._incommingGroup = this._sourceControl.createResourceGroup('incoming', 'Incoming Changes');
+		this._incomingGroup = this._sourceControl.createResourceGroup('incoming', 'Incoming Changes');
 		this._outgoingGroup = this._sourceControl.createResourceGroup('outgoing', 'Outgoing Changes');
 		this._unresolvedGroup = this._sourceControl.createResourceGroup('unresolved', 'Unresolved Changes');
 
@@ -135,7 +135,15 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 
 	provideOriginalResource(uri: Uri, _token: vscode.CancellationToken): vscode.ProviderResult<Uri> {
 		// Convert to EWM resource uri.
-		return Uri.parse(`${EWM_SCHEME}:${uri.path}`);
+		let resourcePath = uri.path;
+		if( resourcePath.toLowerCase().startsWith(this._componentRootUri.path.toLowerCase()) )
+		{
+			// TODO: If file is not modified provide local file.
+			resourcePath = resourcePath.substring(this._componentRootUri.path.length);
+			resourcePath = "/" + this.workspaceName + "/" + this.componentName + resourcePath
+		}
+
+		return Uri.parse(`${EWM_SCHEME}:${resourcePath}`);
 	}
 
 
@@ -229,7 +237,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 
 	private _updateResourceGroupsState(resourcesGroups: EwmResourceGroups): void {
 		// set resource groups
-		if (resourcesGroups.incommingGroup) { this.incommingGroup.resourceStates = resourcesGroups.incommingGroup; }
+		if (resourcesGroups.incomingGroup) { this.incomingGroup.resourceStates = resourcesGroups.incomingGroup; }
 		if (resourcesGroups.outgoingGroup) { this.outgoingGroup.resourceStates = resourcesGroups.outgoingGroup; }
 		if (resourcesGroups.unresolvedGroup) { this.unresolvedGroup.resourceStates = resourcesGroups.unresolvedGroup; }
 
@@ -245,7 +253,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		const config = workspace.getConfiguration('ewm-scm');
 		const useIcons = !config.get<boolean>('decorations.enabled', true);
 
-		const incommingGroup: Resource[] = [],
+		const incomingGroup: Resource[] = [],
 		outgoingGroup: Resource[] = [],
 		unresolvedGroup: Resource[] = [];
 
@@ -274,15 +282,16 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 				}
 			}
 
-			let incommingChanges = componentStatus['incoming-changes'];
-			let outgoingChanges = componentStatus['outgoing-changes'];		
-			let unresolvedChanges = componentStatus.unresolved;
+			const incomingChanges = componentStatus['incoming-changes'];
+			const outgoingChanges = componentStatus['outgoing-changes'];		
+			const unresolvedChanges = componentStatus.unresolved;
 	
-			// Update incomming changes
-			if (incommingChanges) {
-				for (const changeSet of incommingChanges) {
+			// Update incoming changes
+			if (incomingChanges) {
+				const incomingFlow = componentStatus['flow-target']['incoming-flow'].name;
+				for (const changeSet of incomingChanges) {
 					for (const change of changeSet.changes) {
-						incommingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incomming, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+						incomingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incoming, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri, incomingFlow));
 					}
 				}
 			}
@@ -304,7 +313,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			}
 		}
 
-		return { incommingGroup, outgoingGroup, unresolvedGroup };
+		return { incomingGroup: incomingGroup, outgoingGroup, unresolvedGroup };
 	}
 }
 
@@ -389,7 +398,7 @@ export class Resource implements SourceControlResourceState {
 		private _workspaceName: string,
 		private _componentName: string,
 		private _componentRootUri: Uri,
-		private _renameResourceUri?: Uri,		
+		private _resourceStream?: string,		
 	) { 
 		this._resourceUri = Uri.file(_change.path);
 		this._type = Status.MODIFIED;
@@ -415,16 +424,11 @@ export class Resource implements SourceControlResourceState {
 
 		this._rightUri = Uri.joinPath(this._componentRootUri, repositoryFilePathStripped);
 		
-		// Add component name to the path if not present.
-		// let repositoryPathWithComponent = this._resourceUri.path;
-		// if ( !repositoryPathWithComponent.startsWith( '/' + this._componentName ) )
-		// {
-		// 	repositoryPathWithComponent = '/' + this._componentName + repositoryPathWithComponent;
-		// }
-
 		if( this._type === Status.MODIFIED )
 		{
-			this._leftUri = Uri.parse(`${EWM_SCHEME}:${this._resourceUri.path}`);
+			// The repository path including Stream and component name.
+			const repositoryPath = '/' + (this._resourceStream ? this._resourceStream : this._workspaceName) + '/' + this._componentName + repositoryFilePathStripped;
+			this._leftUri = Uri.parse(`${EWM_SCHEME}:${repositoryPath}`);
 		}
 		
 	 }
@@ -617,7 +621,7 @@ export class Resource implements SourceControlResourceState {
 	}
 
 	clone(resourceGroupType?: ResourceGroupType) {
-		return new Resource(this._commandResolver, resourceGroupType ?? this._resourceGroupType, this._change, this._useIcons, this._workspaceName, this._componentName, this._componentRootUri, this._renameResourceUri);
+		return new Resource(this._commandResolver, resourceGroupType ?? this._resourceGroupType, this._change, this._useIcons, this._workspaceName, this._componentName, this._componentRootUri, this._resourceStream);
 	}
 }
 
@@ -629,7 +633,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 	private _onDidChange = new vscode.EventEmitter<Uri>();
 	private loadedFiles = new Map<string, string>(); // this assumes each fiddle is only open once per workspace
 
-	constructor(private ewm: Ewm, private workspaceName: string, private activeWorkspaceFolder: Uri) { }
+	constructor(private ewm: Ewm) { }
 
 	get onDidChange(): vscode.Event<Uri> {
 		return this._onDidChange.event;
@@ -642,7 +646,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 	/**
 	 * Provides the content of a text document for a given URI.
 	 *
-	 * @param uri - The URI of the text document.
+	 * @param uri - The URI of the text document. It should start with StreamName/ComponentName/...
 	 * @param token - A cancellation token.
 	 * @returns A promise that resolves to the content of the text document, or a string indicating the status.
 	 *
@@ -657,21 +661,14 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 		if (token.isCancellationRequested) { return "Canceled"; }
 
 		let relativeUri = uri.path;
-		// Check if string starts with activeWorkspaceFolder.
-		if (relativeUri.startsWith(this.activeWorkspaceFolder.path)) {
-			// Remove activeWorkspaceFolder name from uri.
-			relativeUri = relativeUri.substring(this.activeWorkspaceFolder.path.length);
-		}
 
-		// Check if starting with workspace name
-		// TODO: Move to the toSourceControlResourceState.
-		if (relativeUri.startsWith( '/' + this.workspaceName ))
-		{
-			relativeUri = relativeUri.substring(this.workspaceName.length + 1 );
-		}
+		// const workspacePathIndex = relativeUri.indexOf(this.workspaceName)
+		// if (workspacePathIndex != -1)
+		// {
+		// 	relativeUri = relativeUri.substring(workspacePathIndex + this.workspaceName.length);
+		// }
 
-		console.log(`provideTextDocumentContent uri: ${uri.path}  relativeUri: ${relativeUri}  activeWorkspaceFolder: ${this.activeWorkspaceFolder.path}`);
-
+	
 		// Check if uri is already present in the loadedFiles.
 		// If so then return the tempUri.If not then get file from ewm and store it in system tempdir.
 		const documentContent = this.loadedFiles.get(relativeUri);
@@ -680,18 +677,17 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 			return documentContent;
 		}
 
-		// Remove first folder from the docUri path.
-		const docUri = relativeUri.substring( relativeUri.indexOf('/', 1) );
-		// Get first folder name from the relativeUri path.
-		const componentName = relativeUri.split('/')[1];
+		const workspaceName = relativeUri.split('/')[1];
+		const componentName = relativeUri.split('/')[2];
+		const docUri = relativeUri.substring( workspaceName.length + componentName.length + 2 );
 
 		// Get Temporary directory of the operating system.
 		const systemTempDir = Uri.file(os.tmpdir());
 		const tempFileName = crypto.randomBytes(16).toString("hex");
 		let tempFileUri = Uri.joinPath(systemTempDir, tempFileName);
-		console.log(`doc uri: ${docUri}  componentName: ${componentName} workspaceName: ${this.workspaceName}`);
+		console.log(`doc uri: ${docUri}  componentName: ${componentName} workspaceName: ${workspaceName}`);
 
-		this.ewm.getFile(docUri, componentName, this.workspaceName, tempFileUri).then((success) => {
+		this.ewm.getFile(docUri, componentName, workspaceName, tempFileUri).then((success) => {
 			if (success) {
 				if (!fs.existsSync(tempFileUri.fsPath)) {
 					console.error(`Resource not found: ${tempFileUri.fsPath}:`);
@@ -713,7 +709,7 @@ export class EwmDocumentContentProvider implements vscode.TextDocumentContentPro
 				}
 				const localFileContent = fs.readFileSync(uri.fsPath, 'utf-8');
 				this.loadedFiles.set(relativeUri, localFileContent);
-				this._onDidChange.fire(uri);
+				this._onDidChange.fire( Uri.file(relativeUri) );
 			}
 
 			}).catch((error) => {

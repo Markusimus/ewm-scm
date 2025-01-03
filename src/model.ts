@@ -156,7 +156,7 @@ export class Model implements Disposable {
             if (sandbox) {			
                 const activeWorkspaceFolder = workspace.getWorkspaceFolder(this._rootPath);
                 if (activeWorkspaceFolder) {
-                    const ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, sandbox.shares[0].remote.workspace.name, activeWorkspaceFolder.uri);
+                    const ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm);
                     this.context.subscriptions.push(workspace.registerTextDocumentContentProvider(EWM_SCHEME, ewmDocumentContentProvider));
     
                     for (const sandboxShare of sandbox.shares) {
