@@ -1,7 +1,22 @@
-import { EwmRepository, EwmDocumentContentProvider, EWM_SCHEME, State } from "./ewmSourceControl";
-import { Disposable, EventEmitter, Event, ExtensionContext, workspace, window, Uri, OutputChannel, commands, Memento, SourceControlResourceState } from "vscode";
+import { EwmRepository, EwmDocumentContentProvider, EWM_SCHEME, State, Resource } from "./ewmSourceControl";
+import { Disposable, EventEmitter, Event, ExtensionContext, workspace, window, Uri, OutputChannel, commands, Memento, SourceControlResourceState, l10n, QuickPickItem } from "vscode";
 import { Ewm } from './ewm';
 import { EwmShareI } from "./ewmSandboxInterface";
+// import { memoize } from "./decorators";
+
+// class RepositoryPick implements QuickPickItem {
+// 	@memoize get label(): string {
+// 		return path.basename(this.repository.root);
+// 	}
+
+// 	@memoize get description(): string {
+// 		return [this.repository.headLabel, this.repository.syncLabel]
+// 			.filter(l => !!l)
+// 			.join(' ');
+// 	}
+
+// 	constructor(public readonly repository: EwmRepository, public readonly index: number) { }
+// }
 
 interface OpenRepository extends Disposable {
 	repository: EwmRepository;
@@ -64,19 +79,19 @@ export class Model implements Disposable {
     constructor(private context: ExtensionContext, private outputChannel: OutputChannel) {
 
         // Register update command
-        const disposableUpdate = commands.registerCommand('ewm-scm.ewmUpdate', async () => {
-            this.updateStatus();
-        });
-        context.subscriptions.push(disposableUpdate);
+        // const disposableUpdate = commands.registerCommand('ewm-scm.ewmUpdate', async () => {
+        //     this.updateStatus();
+        // });
+        // context.subscriptions.push(disposableUpdate);
 
         // Register checkin command
-    	context.subscriptions.push(commands.registerCommand("ewm-scm.checkin",
-        	async (...resourceStates: SourceControlResourceState[]) => {
-                    const repository = this.repositories.find(r => (r.componentRootUri === resourceStates[0].resourceUri )); //  contains(resourceState.resourceUri));
-                    if (repository) {
-                        await repository.checkin(resourceStates);
-                    }
-        	}));
+    	// context.subscriptions.push(commands.registerCommand("ewm-scm.checkin",
+        // 	async (...resourceStates: SourceControlResourceState[]) => {
+        //             const repository = this.repositories.find(r => (r.componentRootUri === resourceStates[0].resourceUri )); //  contains(resourceState.resourceUri));
+        //             if (repository) {
+        //                 await repository.checkin(resourceStates);
+        //             }
+        // 	}));
 
         this._rootPath =
             workspace.workspaceFolders && workspace.workspaceFolders.length > 0
@@ -140,6 +155,43 @@ export class Model implements Disposable {
 		this.openRepositories.push(openRepository);
         this._onDidOpenRepository.fire(repository);
     }
+
+    getRepository(hint: Resource): EwmRepository | undefined
+    getRepository(hint: any): EwmRepository | undefined {
+        if (hint instanceof Resource) {
+            // Find repository with componentName that matches the hint's componentName
+            const componentName = hint.componentName;
+            for (const openRepository of this.openRepositories) {
+                if (openRepository.repository.componentName === componentName) {
+                    return openRepository.repository;
+                }
+            }
+        }
+        return undefined;
+	}
+
+    async pickRepository(): Promise<EwmRepository | undefined> {
+		if (this.openRepositories.length === 0) {
+			throw new Error(l10n.t('There are no available repositories'));
+		}
+
+        return this.openRepositories[0].repository;
+
+		// const picks = this.openRepositories.map((e, index) => new RepositoryPick(e.repository, index));
+		// const active = window.activeTextEditor;
+		// const repository = active && this.getRepository(active.document.fileName);
+		// const index = picks.findIndex(pick => pick.repository === repository);
+
+		// // Move repository pick containing the active text editor to appear first
+		// if (index > -1) {
+		// 	picks.unshift(...picks.splice(index, 1));
+		// }
+
+		// const placeHolder = l10n.t('Choose a repository');
+		// const pick = await window.showQuickPick(picks, { placeHolder });
+
+		// return pick && pick.repository;
+	}
 
     async initEwm() {
 

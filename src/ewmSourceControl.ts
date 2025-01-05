@@ -7,8 +7,8 @@ import { Ewm } from './ewm';
 import os from 'os';
 import * as path from 'path';
 import { debounce, memoize, throttle } from './decorators';
-import { Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource, FileDecoration, ThemeColor } from 'vscode';
-
+import { RelativePattern, Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource, FileDecoration, ThemeColor } from 'vscode';
+import { anyEvent, filterEvent, relativePath } from './util';
 
 export const CONFIGURATION_FILE = '.jsewm';
 export const EWM_SCHEME = 'ewm';
@@ -75,17 +75,19 @@ interface EwmResourceGroups {
 	unresolvedGroup?: Resource[];
 }
 
+const timeout = (millis: number) => new Promise(c => setTimeout(c, millis));
+
 export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	private _sourceControl: vscode.SourceControl;
-	private componentName : string;
-	private workspaceName: string;
+	private _componentName : string;
+	private _workspaceName: string;
 	private _componentRootUri: Uri;
 	private ewm : Ewm;
 	private disposables: Disposable[] = [];
 	private updateModelStateCancellationTokenSource: CancellationTokenSource | undefined;
 
 	private _onDidChangeStatus = new EventEmitter<void>();
-		readonly onDidRunGitStatus: Event<void> = this._onDidChangeStatus.event;
+	readonly onDidRunGitStatus: Event<void> = this._onDidChangeStatus.event;
 
 	private _incomingGroup: SourceControlResourceGroup;
 	get incomingGroup(): EwmResourceGroup { return this._incomingGroup as EwmResourceGroup; }
@@ -104,15 +106,16 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		return this._componentRootUri.path;
 	}
 
-    private timeout?: NodeJS.Timeout;
+	get componentName(): string { return this._componentName;}
+	get workspaceName(): string { return this._workspaceName;}
 
 	private resourceCommandResolver = new ResourceCommandResolver(this);
 
     constructor(context: vscode.ExtensionContext, ewmShare: EwmShareI, private outputChannel: vscode.OutputChannel) {
 		
-		this.componentName = ewmShare.remote.component.name;
+		this._componentName = ewmShare.remote.component.name;
 		this._componentRootUri = Uri.file(ewmShare.local);
-		this.workspaceName = ewmShare.remote.workspace.name;
+		this._workspaceName = ewmShare.remote.workspace.name;
 
 		this.ewm = new Ewm(this._componentRootUri, outputChannel);
 		// this._sourceControl = vscode.scm.createSourceControl('ewm', this.componentName, this._componentRootUri);
@@ -130,6 +133,32 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
         // context.subscriptions.push(fileSystemWatcher);
 
 		this._sourceControl.quickDiffProvider = this;
+
+		// Setup file system watcher for the repository
+		const repositoryWatcher = workspace.createFileSystemWatcher(new RelativePattern(this._componentRootUri, '**'));
+		this.disposables.push(repositoryWatcher);
+
+		const onRepositoryFileChange = anyEvent(repositoryWatcher.onDidChange, repositoryWatcher.onDidCreate, repositoryWatcher.onDidDelete);
+		const onRepositoryWorkingTreeFileChange = filterEvent(onRepositoryFileChange, uri => !/\.jazz5($|\\|\/)/.test(relativePath(this._componentRootUri.fsPath, uri.fsPath)));
+
+		let onRepositoryDotGitFileChange: Event<Uri>;
+
+		// try {
+		// 	const dotGitFileWatcher = new DotGitWatcher(this, logger);
+		// 	onRepositoryDotGitFileChange = dotGitFileWatcher.event;
+		// 	this.disposables.push(dotGitFileWatcher);
+		// } catch (err) {
+		// 	outputChannel.appendLine(`Failed to watch path:'${this.dotGit.path}' or commonPath:'${this.dotGit.commonPath}', reverting to legacy API file watched. Some events might be lost.\n${err.stack || err}`);
+
+		// 	onRepositoryDotGitFileChange = filterEvent(onRepositoryFileChange, uri => /\.git($|\\|\/)/.test(uri.path));
+		// }
+
+		// FS changes should trigger `git status`:
+		// 	- any change inside the repository working tree
+		//	- any change whithin the first level of the `.git` folder, except the folder itself and `index.lock`
+		// const onFileChange = anyEvent(onRepositoryWorkingTreeFileChange, onRepositoryDotGitFileChange);
+		// onFileChange(this.onFileChange, this, this.disposables);
+		onRepositoryWorkingTreeFileChange(this.onFileChange, this, this.disposables);
     }
 
 
@@ -140,22 +169,31 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		{
 			// TODO: If file is not modified provide local file.
 			resourcePath = resourcePath.substring(this._componentRootUri.path.length);
-			resourcePath = "/" + this.workspaceName + "/" + this.componentName + resourcePath
+			resourcePath = "/" + this._workspaceName + "/" + this._componentName + resourcePath
 		}
 
 		return Uri.parse(`${EWM_SCHEME}:${resourcePath}`);
 	}
 
+	public async refresh(): Promise<void> {
+		await this.status();
+		return;
+	}
 
-	public async checkin(resourceStates: SourceControlResourceState[]): Promise<void> {
+
+	public async checkin(resourceStates: Resource[]): Promise<void> {
 		this.outputChannel.appendLine('commit: ' + resourceStates);
 		let uriList: Uri[] = [];
 		for (const resourceState of resourceStates) {
-			uriList.push(resourceState.resourceUri);
+			if (resourceState.rightUri){
+				uriList.push(resourceState.rightUri);
+			}
 		}
 
-		let workspaceUpdate: WorkspaceI = await this.ewm.checkin(uriList);
-		this.updateModelState();
+		const commentMsg = this._sourceControl.inputBox.value;
+
+		await this.ewm.checkin(uriList, commentMsg);
+		this.updateRepositoryState();
 
 		// for (const componentData of workspaceUpdate.components) {
 		// 	this.outputChannel.appendLine('component: ' + componentData.name);
@@ -174,20 +212,20 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	}
 
 
-	// @throttle
+	@throttle
 	async status(): Promise<void> {
 		// await this.run(Operation.Status);
-		await this.updateModelState();
+		await this.updateRepositoryState();
 	}
 
-	private async updateModelState(optimisticResourcesGroups?: EwmResourceGroups) {
+	private async updateRepositoryState(optimisticResourcesGroups?: EwmResourceGroups) {
 		this.updateModelStateCancellationTokenSource?.cancel();
 
 		this.updateModelStateCancellationTokenSource = new CancellationTokenSource();
-		await this._updateModelState(optimisticResourcesGroups, this.updateModelStateCancellationTokenSource.token);
+		await this._updateRepositoryState(optimisticResourcesGroups, this.updateModelStateCancellationTokenSource.token);
 	}
 
-	private async _updateModelState(optimisticResourcesGroups?: EwmResourceGroups, cancellationToken?: CancellationToken): Promise<void> {
+	private async _updateRepositoryState(optimisticResourcesGroups?: EwmResourceGroups, cancellationToken?: CancellationToken): Promise<void> {
 		try {
 			// Optimistically update resource groups
 			if (optimisticResourcesGroups) {
@@ -265,7 +303,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			// Find workspace in statusData
 			for (var ewmWorkspace of workspaceStatus.workspaces)
 			{
-				if (ewmWorkspace.name && ewmWorkspace.name === this.workspaceName)
+				if (ewmWorkspace.name && ewmWorkspace.name === this._workspaceName)
 				{
 					componentsStatus = ewmWorkspace.components;
 					break;
@@ -275,7 +313,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			// Find Component in componentsStatus
 			for (var _componentStatus of componentsStatus)
 			{
-				if (_componentStatus.name && _componentStatus.name === this.componentName)
+				if (_componentStatus.name && _componentStatus.name === this._componentName)
 				{
 					componentStatus = _componentStatus;
 					break;
@@ -291,7 +329,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 				const incomingFlow = componentStatus['flow-target']['incoming-flow'].name;
 				for (const changeSet of incomingChanges) {
 					for (const change of changeSet.changes) {
-						incomingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incoming, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri, incomingFlow));
+						incomingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Incoming, change, useIcons, this._workspaceName, this._componentName, this._componentRootUri, incomingFlow));
 					}
 				}
 			}
@@ -300,7 +338,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			if (outgoingChanges) {
 				for (const changeSet of outgoingChanges) {
 					for (const change of changeSet.changes) {
-						outgoingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Outgoing, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+						outgoingGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Outgoing, change, useIcons, this._workspaceName, this._componentName, this._componentRootUri));
 					}
 				}
 			}
@@ -308,13 +346,64 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			// Update unresolved Changes
 			if (unresolvedChanges) {
 				for (const change of unresolvedChanges) {
-					unresolvedGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Unresolved, change, useIcons, this.workspaceName, this.componentName, this._componentRootUri));
+					unresolvedGroup.push(new Resource(this.resourceCommandResolver, ResourceGroupType.Unresolved, change, useIcons, this._workspaceName, this._componentName, this._componentRootUri));
 				}
 			}
 		}
 
 		return { incomingGroup: incomingGroup, outgoingGroup, unresolvedGroup };
 	}
+
+	private onFileChange(_uri: Uri): void {
+		const config = workspace.getConfiguration('ewm-scm');
+		const autorefresh = config.get<boolean>('autorefresh', true);
+
+		if (!autorefresh) {
+			this.outputChannel.appendLine('[Repository][onFileChange] Skip running git status because autorefresh setting is disabled.');
+			return;
+		}
+
+		// if (this.isRepositoryHuge) {
+		// 	this.logger.trace('[Repository][onFileChange] Skip running git status because repository is huge.');
+		// 	return;
+		// }
+
+		// if (!this.operations.isIdle()) {
+		// 	this.logger.trace('[Repository][onFileChange] Skip running git status because an operation is running.');
+		// 	return;
+		// }
+
+		this.eventuallyUpdateWhenIdleAndWait();
+	}
+
+	@debounce(1000)
+	private eventuallyUpdateWhenIdleAndWait(): void {
+		this.updateWhenIdleAndWait();
+	}
+
+	@throttle
+	private async updateWhenIdleAndWait(): Promise<void> {
+		// await this.whenIdleAndFocused();
+		await this.status();
+		await timeout(5000);
+	}
+
+	// async whenIdleAndFocused(): Promise<void> {
+	// 	while (true) {
+	// 		if (!this.operations.isIdle()) {
+	// 			await eventToPromise(this.onDidRunOperation);
+	// 			continue;
+	// 		}
+
+	// 		if (!window.state.focused) {
+	// 			const onDidFocusWindow = filterEvent(window.onDidChangeWindowState, e => e.focused);
+	// 			await eventToPromise(onDidFocusWindow);
+	// 			continue;
+	// 		}
+
+	// 		return;
+	// 	}
+	// }
 }
 
 class ResourceCommandResolver {
@@ -579,7 +668,11 @@ export class Resource implements SourceControlResourceState {
 		}
 	}
 
-	// @memoize
+	get componentName(): string {
+		return this._componentName;
+	}
+
+	@memoize
 	private get faded(): boolean {
 		// TODO@joao
 		return false;
@@ -587,7 +680,7 @@ export class Resource implements SourceControlResourceState {
 		// return this.resourceUri.fsPath.substr(0, workspaceRootPath.length) !== workspaceRootPath;
 	}
 
-	// @memoize
+	@memoize
 	get resourceUri(): Uri {
 		// if (this.renameResourceUri && (this._type === Status.MODIFIED || this._type === Status.DELETED || this._type === Status.INDEX_RENAMED || this._type === Status.INDEX_COPIED || this._type === Status.INTENT_TO_RENAME)) {
 		// 	return this.renameResourceUri;
@@ -596,7 +689,7 @@ export class Resource implements SourceControlResourceState {
 		return this._resourceUri;
 	}
 
-	// @memoize
+	@memoize
 	get command(): Command {
 		return this._commandResolver.resolveDefaultCommand(this);
 	}

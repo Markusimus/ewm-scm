@@ -34,7 +34,7 @@ export class Ewm {
      */
     public async execLscm(command: string) : Promise<string> {
         let commandToExecute = `lscm ${command}`;
-        this.outputChannel.appendLine(commandToExecute);
+        this.outputChannel.appendLine(`Executing: ${command}`); // Log the command being executed
         const exOptions : ExecOptions = {cwd:this.rootPath.fsPath};
 
         return new Promise<string>((resolve, reject) => {
@@ -149,16 +149,17 @@ export class Ewm {
     /**
      * Checks in a file with the provided file path.
      *
-     * @param file - The URI of the file to check in.
+     * @param file - The URI of the file to check in. The path should be relative or absolute.
      * @returns A promise that resolves with the status data or rejects with an error.
      *
      * @throws Will show an error message and reject the promise if the command execution fails.
      */
-    public async checkin(listOfFiles: vscode.Uri[]): Promise<WorkspaceI> {
+    public async checkin(listOfFiles: vscode.Uri[], commentMsg: string): Promise<WorkspaceI> {
         let command = `checkin -j `;
         for (const file of listOfFiles) {
             command += ` "${file.fsPath}"`;
         }
+        command += ` --comment "${commentMsg}"`; // Add comment message to the command
         
         let retValue: WorkspaceI = { } as WorkspaceI;
         try {

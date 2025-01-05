@@ -20,17 +20,30 @@
     "commands": [
       {
         "command": "ewm-scm.ewmInit",
-        "title": "EWM Init"
+        "title": "Init",
+        "category": "EWM"
       },
       {
         "command": "ewm-scm.ewmUpdate",
-        "title": "EWM Update"
+        "title": "Update Status",
+        "category": "EWM"
       },
       {
         "command": "ewm-scm.checkin",
         "title": "Check-in",
-        "category": "SCM"
+        "category": "EWM"
+      },
+      {
+        "command": "ewm-scm.showOutput",
+        "title": "Show output",
+        "category": "EWM"
+      },
+      {
+        "command": "ewm-scm.refresh",
+        "title": "Refresh repository",
+        "category": "EWM"
       }
+      
     ],
     "menus": {
 			"scm/resourceState/context": [
