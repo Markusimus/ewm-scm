@@ -83,6 +83,19 @@ export class CommandCenter {
 		}
 	}
 
+	@command('ewm-scm.open')
+	async open(...resourceStates: Resource[]): Promise<void> {
+		this.logger.appendLine(`[CommandCenter][open] ewm-scm.open ${resourceStates.length} `);
+
+		if (resourceStates.length > 0)
+		{
+			// Open the file in vscode for all resourceStates
+			for (const resource of resourceStates) {
+				commands.executeCommand('vscode.open', resource.resourceUri);
+			}
+
+		}
+	}
 
     private createCommand(id: string, key: string, method: Function, options: ScmCommandOptions): (...args: any[]) => any {
 		const result = (...args: any[]) => {

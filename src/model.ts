@@ -1,7 +1,8 @@
-import { EwmRepository, EwmDocumentContentProvider, EWM_SCHEME, State, Resource } from "./ewmSourceControl";
+import { EwmRepository, EWM_SCHEME, State, Resource } from "./ewmSourceControl";
 import { Disposable, EventEmitter, Event, ExtensionContext, workspace, window, Uri, OutputChannel, commands, Memento, SourceControlResourceState, l10n, QuickPickItem } from "vscode";
 import { Ewm } from './ewm';
 import { EwmShareI } from "./ewmSandboxInterface";
+import { EwmDocumentContentProvider } from './ewmDocumentContentProvider';
 // import { memoize } from "./decorators";
 
 // class RepositoryPick implements QuickPickItem {
@@ -41,7 +42,7 @@ export class Model implements Disposable {
 	readonly onDidCloseRepository: Event<EwmRepository> = this._onDidCloseRepository.event;
 
     private _onDidChangeState = new EventEmitter<State>();
-	readonly onDidChangeState = this._onDidChangeState.event;
+	readonly onDidChangeState: Event<State> = this._onDidChangeState.event;
 
 	private _onDidChangeRepository = new EventEmitter<ModelChangeEvent>();
 	readonly onDidChangeRepository: Event<ModelChangeEvent> = this._onDidChangeRepository.event;
@@ -77,21 +78,6 @@ export class Model implements Disposable {
 	}
 
     constructor(private context: ExtensionContext, private outputChannel: OutputChannel) {
-
-        // Register update command
-        // const disposableUpdate = commands.registerCommand('ewm-scm.ewmUpdate', async () => {
-        //     this.updateStatus();
-        // });
-        // context.subscriptions.push(disposableUpdate);
-
-        // Register checkin command
-    	// context.subscriptions.push(commands.registerCommand("ewm-scm.checkin",
-        // 	async (...resourceStates: SourceControlResourceState[]) => {
-        //             const repository = this.repositories.find(r => (r.componentRootUri === resourceStates[0].resourceUri )); //  contains(resourceState.resourceUri));
-        //             if (repository) {
-        //                 await repository.checkin(resourceStates);
-        //             }
-        // 	}));
 
         this._rootPath =
             workspace.workspaceFolders && workspace.workspaceFolders.length > 0
@@ -145,10 +131,13 @@ export class Model implements Disposable {
         // ewmSourceControls.push(ewmSourceControl);
         // this._repositories.set(sandboxShare.remote.component.name, ewmSourceControl);
 
+        const originalResourceChangeListener = repository.onDidChangeOriginalResource(uri => this._onDidChangeOriginalResource.fire({ repository, uri }));
+
         const dispose = () => {
             repository.dispose();
             this.openRepositories = this.openRepositories.filter(e => e !== openRepository);
 			this._onDidCloseRepository.fire(repository);
+            originalResourceChangeListener.dispose();
         };
 
         const openRepository = { repository, dispose };
@@ -156,8 +145,7 @@ export class Model implements Disposable {
         this._onDidOpenRepository.fire(repository);
     }
 
-    getRepository(hint: Resource): EwmRepository | undefined
-    getRepository(hint: any): EwmRepository | undefined {
+    getRepository(hint: Resource | any): EwmRepository | undefined {
         if (hint instanceof Resource) {
             // Find repository with componentName that matches the hint's componentName
             const componentName = hint.componentName;
@@ -168,7 +156,7 @@ export class Model implements Disposable {
             }
         }
         return undefined;
-	}
+    }
 
     async pickRepository(): Promise<EwmRepository | undefined> {
 		if (this.openRepositories.length === 0) {
@@ -208,7 +196,7 @@ export class Model implements Disposable {
             if (sandbox) {			
                 const activeWorkspaceFolder = workspace.getWorkspaceFolder(this._rootPath);
                 if (activeWorkspaceFolder) {
-                    const ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm);
+                    const ewmDocumentContentProvider = new EwmDocumentContentProvider(ewm, this);
                     this.context.subscriptions.push(workspace.registerTextDocumentContentProvider(EWM_SCHEME, ewmDocumentContentProvider));
     
                     for (const sandboxShare of sandbox.shares) {

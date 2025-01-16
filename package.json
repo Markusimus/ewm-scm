@@ -2,7 +2,7 @@
   "name": "ewm-scm",
 	"displayName": "vscode-EWM",
 	"description": "The SCM extension for Engineering Workflow Manger.",
-	"version": "0.0.7",
+	"version": "0.0.8",
   "license": "MIT",
 	"engines": {
     "vscode": "^1.96.0"
@@ -42,6 +42,11 @@
         "command": "ewm-scm.refresh",
         "title": "Refresh repository",
         "category": "EWM"
+      },
+      {
+        "command": "ewm-scm.open",
+        "title": "Open file",
+        "category": "EWM"
       }
       
     ],
@@ -50,6 +55,11 @@
 				{
 					"command": "ewm-scm.checkin",
           "when": "scmProvider == ewm && scmResourceGroup == unresolved",
+          "group": "navigation"
+				},
+        {
+					"command": "ewm-scm.open",
+          "when": "scmProvider == ewm",
           "group": "navigation"
 				}
 			]

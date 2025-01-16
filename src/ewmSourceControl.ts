@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
-import * as crypto from 'crypto'; // Import the Node.js crypto module
-import * as fs from 'fs';
+
 import { StatusDataI, ComponentI, ChangesetI, ChangeI, WorkspaceI}  from './ewmStatusInterface';
 import { EwmShareI } from './ewmSandboxInterface';
 import { Ewm } from './ewm';
-import os from 'os';
 import * as path from 'path';
 import { debounce, memoize, throttle } from './decorators';
 import { RelativePattern, Uri, SourceControlResourceGroup, Disposable, SourceControlResourceState, Command, SourceControlResourceDecorations, workspace, l10n, CancellationToken, CancellationError, Event, EventEmitter, CancellationTokenSource, FileDecoration, ThemeColor } from 'vscode';
@@ -98,6 +96,9 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	private _unresolvedGroup: SourceControlResourceGroup;
 	get unresolvedGroup(): EwmResourceGroup { return this._unresolvedGroup as EwmResourceGroup; }
 
+	private _onDidChangeOriginalResource = new EventEmitter<Uri>();
+	readonly onDidChangeOriginalResource: Event<Uri> = this._onDidChangeOriginalResource.event;
+
 	get componentRootUri(): Uri {
 		return this._componentRootUri;
 	}
@@ -112,25 +113,22 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	private resourceCommandResolver = new ResourceCommandResolver(this);
 
     constructor(context: vscode.ExtensionContext, ewmShare: EwmShareI, private outputChannel: vscode.OutputChannel) {
-		
+		// Initialization
 		this._componentName = ewmShare.remote.component.name;
 		this._componentRootUri = Uri.file(ewmShare.local);
 		this._workspaceName = ewmShare.remote.workspace.name;
 
 		this.ewm = new Ewm(this._componentRootUri, outputChannel);
-		// this._sourceControl = vscode.scm.createSourceControl('ewm', this.componentName, this._componentRootUri);
 		this._sourceControl = vscode.scm.createSourceControl('ewm', 'EWM', this._componentRootUri);
 		this.disposables.push(this._sourceControl);
 
 		this._sourceControl.acceptInputCommand = { command: 'ewm-scm.commit', title: 'Commit', arguments: [this._sourceControl] };
-		// this._sourceControl.inputBox.validateInput = this.validateInput.bind(this);
 
 		this._incomingGroup = this._sourceControl.createResourceGroup('incoming', 'Incoming Changes');
 		this._outgoingGroup = this._sourceControl.createResourceGroup('outgoing', 'Outgoing Changes');
 		this._unresolvedGroup = this._sourceControl.createResourceGroup('unresolved', 'Unresolved Changes');
 
         context.subscriptions.push(this._sourceControl);
-        // context.subscriptions.push(fileSystemWatcher);
 
 		this._sourceControl.quickDiffProvider = this;
 
@@ -141,23 +139,6 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		const onRepositoryFileChange = anyEvent(repositoryWatcher.onDidChange, repositoryWatcher.onDidCreate, repositoryWatcher.onDidDelete);
 		const onRepositoryWorkingTreeFileChange = filterEvent(onRepositoryFileChange, uri => !/\.jazz5($|\\|\/)/.test(relativePath(this._componentRootUri.fsPath, uri.fsPath)));
 
-		let onRepositoryDotGitFileChange: Event<Uri>;
-
-		// try {
-		// 	const dotGitFileWatcher = new DotGitWatcher(this, logger);
-		// 	onRepositoryDotGitFileChange = dotGitFileWatcher.event;
-		// 	this.disposables.push(dotGitFileWatcher);
-		// } catch (err) {
-		// 	outputChannel.appendLine(`Failed to watch path:'${this.dotGit.path}' or commonPath:'${this.dotGit.commonPath}', reverting to legacy API file watched. Some events might be lost.\n${err.stack || err}`);
-
-		// 	onRepositoryDotGitFileChange = filterEvent(onRepositoryFileChange, uri => /\.git($|\\|\/)/.test(uri.path));
-		// }
-
-		// FS changes should trigger `git status`:
-		// 	- any change inside the repository working tree
-		//	- any change whithin the first level of the `.git` folder, except the folder itself and `index.lock`
-		// const onFileChange = anyEvent(onRepositoryWorkingTreeFileChange, onRepositoryDotGitFileChange);
-		// onFileChange(this.onFileChange, this, this.disposables);
 		onRepositoryWorkingTreeFileChange(this.onFileChange, this, this.disposables);
     }
 
@@ -187,6 +168,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		for (const resourceState of resourceStates) {
 			if (resourceState.rightUri){
 				uriList.push(resourceState.rightUri);
+				// this._onDidChangeOriginalResource.fire(resourceState.rightUri); // TODO: Need to include Workspace
 			}
 		}
 
@@ -195,15 +177,14 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 		await this.ewm.checkin(uriList, commentMsg);
 		this.updateRepositoryState();
 
-		// for (const componentData of workspaceUpdate.components) {
-		// 	this.outputChannel.appendLine('component: ' + componentData.name);
+		// Remove the files from the cache.
+		for (const resourceState of resourceStates) {
+			if (resourceState.leftUri){
+				this._onDidChangeOriginalResource.fire(resourceState.leftUri);
+			}
+		}
 
-		// 	if (ewmSourceControls.has(componentData.name)) {
-		// 		const ewmSourceControl = ewmSourceControls.get(componentData.name);
-		// 		await ewmSourceControl?.updateResourceGroups();
-		// 		// await ewmSourceControl?.updateComponent(componentData);
-		// 	}
-		// }
+		return;
 	}
 
     dispose() {
@@ -214,7 +195,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 
 	@throttle
 	async status(): Promise<void> {
-		// await this.run(Operation.Status);
+		// Status Handling
 		await this.updateRepositoryState();
 	}
 
@@ -232,33 +213,6 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 				this._updateResourceGroupsState(optimisticResourcesGroups);
 			}
 
-			// const [HEAD, remotes, submodules, rebaseCommit, mergeInProgress, cherryPickInProgress, commitTemplate] =
-			// 	await Promise.all([
-			// 		this.repository.getHEADRef(),
-			// 		this.repository.getRemotes(),
-			// 		this.repository.getSubmodules(),
-			// 		this.getRebaseCommit(),
-			// 		this.isMergeInProgress(),
-			// 		this.isCherryPickInProgress(),
-			// 		this.getInputTemplate()]);
-
-			// this._HEAD = HEAD;
-			// this._remotes = remotes!;
-			// this._submodules = submodules!;
-			// this.rebaseCommit = rebaseCommit;
-			// this.mergeInProgress = mergeInProgress;
-			// this.cherryPickInProgress = cherryPickInProgress;
-
-			// this._sourceControl.commitTemplate = commitTemplate;
-
-			// Execute cancellable long-running operation
-			// const [resourceGroups, refs] =
-			// 	await Promise.all([
-			// 		this.getStatus(cancellationToken),
-			// 		this.getRefs({}, cancellationToken)]);
-
-			// this._refs = refs;
-
 			const resourceGroups = await this.getStatus(cancellationToken);
 			this._updateResourceGroupsState(resourceGroups);
 
@@ -274,13 +228,10 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	}
 
 	private _updateResourceGroupsState(resourcesGroups: EwmResourceGroups): void {
-		// set resource groups
+		// Resource Groups
 		if (resourcesGroups.incomingGroup) { this.incomingGroup.resourceStates = resourcesGroups.incomingGroup; }
 		if (resourcesGroups.outgoingGroup) { this.outgoingGroup.resourceStates = resourcesGroups.outgoingGroup; }
 		if (resourcesGroups.unresolvedGroup) { this.unresolvedGroup.resourceStates = resourcesGroups.unresolvedGroup; }
-
-		// set count badge
-		// this.setCountBadge();
 	}
 
 	private async getStatus(cancellationToken?: CancellationToken): Promise<EwmResourceGroups> {
@@ -301,7 +252,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 
 		if (workspaceStatus) {
 			// Find workspace in statusData
-			for (var ewmWorkspace of workspaceStatus.workspaces)
+			for (let ewmWorkspace of workspaceStatus.workspaces)
 			{
 				if (ewmWorkspace.name && ewmWorkspace.name === this._workspaceName)
 				{
@@ -311,7 +262,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			}
 
 			// Find Component in componentsStatus
-			for (var _componentStatus of componentsStatus)
+			for (let _componentStatus of componentsStatus)
 			{
 				if (_componentStatus.name && _componentStatus.name === this._componentName)
 				{
@@ -355,6 +306,7 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 	}
 
 	private onFileChange(_uri: Uri): void {
+		// File Changes
 		const config = workspace.getConfiguration('ewm-scm');
 		const autorefresh = config.get<boolean>('autorefresh', true);
 
@@ -362,16 +314,6 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 			this.outputChannel.appendLine('[Repository][onFileChange] Skip running git status because autorefresh setting is disabled.');
 			return;
 		}
-
-		// if (this.isRepositoryHuge) {
-		// 	this.logger.trace('[Repository][onFileChange] Skip running git status because repository is huge.');
-		// 	return;
-		// }
-
-		// if (!this.operations.isIdle()) {
-		// 	this.logger.trace('[Repository][onFileChange] Skip running git status because an operation is running.');
-		// 	return;
-		// }
 
 		this.eventuallyUpdateWhenIdleAndWait();
 	}
@@ -383,7 +325,6 @@ export class EwmRepository implements Disposable, vscode.QuickDiffProvider {
 
 	@throttle
 	private async updateWhenIdleAndWait(): Promise<void> {
-		// await this.whenIdleAndFocused();
 		await this.status();
 		await timeout(5000);
 	}
@@ -537,7 +478,7 @@ export class Resource implements SourceControlResourceState {
 			case Status.CONFLICT:
 				return '!'; // Using ! instead of ⚠, because the latter looks really bad on windows
 			default:
-				throw new Error('Unknown git status: ' + type);
+				throw new Error('Unknown EWM status: ' + type);
 		}
 	}
 
@@ -626,6 +567,7 @@ export class Resource implements SourceControlResourceState {
 		}
 	}
 
+	// Return the repository URI of the resource includeing Workspace and Component
 	get original(): Uri { return this._resourceUri; }
 
 	// The repository URI of the resource
@@ -715,104 +657,5 @@ export class Resource implements SourceControlResourceState {
 
 	clone(resourceGroupType?: ResourceGroupType) {
 		return new Resource(this._commandResolver, resourceGroupType ?? this._resourceGroupType, this._change, this._useIcons, this._workspaceName, this._componentName, this._componentRootUri, this._resourceStream);
-	}
-}
-
-/**
- * Provides the content of the JS Fiddle documents as fetched from the server i.e.  without the local edits.
- * This is used for the source control diff.
- */
-export class EwmDocumentContentProvider implements vscode.TextDocumentContentProvider, vscode.Disposable {
-	private _onDidChange = new vscode.EventEmitter<Uri>();
-	private loadedFiles = new Map<string, string>(); // this assumes each fiddle is only open once per workspace
-
-	constructor(private ewm: Ewm) { }
-
-	get onDidChange(): vscode.Event<Uri> {
-		return this._onDidChange.event;
-	}
-
-	dispose(): void {
-		this._onDidChange.dispose();
-	}
-
-	/**
-	 * Provides the content of a text document for a given URI.
-	 *
-	 * @param uri - The URI of the text document. It should start with StreamName/ComponentName/...
-	 * @param token - A cancellation token.
-	 * @returns A promise that resolves to the content of the text document, or a string indicating the status.
-	 *
-	 * This method checks if the document content is already loaded. If so, it returns the cached content.
-	 * Otherwise, it retrieves the file from the EWM system, stores it in a temporary directory, reads its content,
-	 * caches it, and then returns the content. If the file is not found or an error occurs during the retrieval,
-	 * appropriate messages are returned.
-	 *
-	 * The method also handles cancellation requests and logs various stages of the process for debugging purposes.
-	 */
-	provideTextDocumentContent(uri: Uri, token: vscode.CancellationToken): vscode.ProviderResult<string> {
-		if (token.isCancellationRequested) { return "Canceled"; }
-
-		let relativeUri = uri.path;
-
-		// const workspacePathIndex = relativeUri.indexOf(this.workspaceName)
-		// if (workspacePathIndex != -1)
-		// {
-		// 	relativeUri = relativeUri.substring(workspacePathIndex + this.workspaceName.length);
-		// }
-
-	
-		// Check if uri is already present in the loadedFiles.
-		// If so then return the tempUri.If not then get file from ewm and store it in system tempdir.
-		const documentContent = this.loadedFiles.get(relativeUri);
-		if (documentContent) {
-			console.log(`provideTextDocumentContent using the already loaded file: ${relativeUri}`);
-			return documentContent;
-		}
-
-		const workspaceName = relativeUri.split('/')[1];
-		const componentName = relativeUri.split('/')[2];
-		const docUri = relativeUri.substring( workspaceName.length + componentName.length + 2 );
-
-		// Get Temporary directory of the operating system.
-		const systemTempDir = Uri.file(os.tmpdir());
-		const tempFileName = crypto.randomBytes(16).toString("hex");
-		let tempFileUri = Uri.joinPath(systemTempDir, tempFileName);
-		console.log(`doc uri: ${docUri}  componentName: ${componentName} workspaceName: ${workspaceName}`);
-
-		this.ewm.getFile(docUri, componentName, workspaceName, tempFileUri).then((success) => {
-			if (success) {
-				if (!fs.existsSync(tempFileUri.fsPath)) {
-					console.error(`Resource not found: ${tempFileUri.fsPath}:`);
-					return "";
-				}
-	
-				// Open and read content of the file
-				const fileContent = fs.readFileSync(tempFileUri.fsPath, 'utf-8');
-				this.loadedFiles.set(relativeUri, fileContent);
-				// Remove the temp file after reading the content.
-				fs.unlinkSync(tempFileUri.fsPath);
-				this._onDidChange.fire(uri);
-				
-			}
-			else {
-				if (!fs.existsSync(uri.fsPath)) {
-					console.error(`Resource not found: ${tempFileUri.fsPath}:`);
-					return "";
-				}
-				const localFileContent = fs.readFileSync(uri.fsPath, 'utf-8');
-				this.loadedFiles.set(relativeUri, localFileContent);
-				this._onDidChange.fire( Uri.file(relativeUri) );
-			}
-
-			}).catch((error) => {
-				// Handle any errors that occur during the execution
-				console.error(`Failed to download file ${docUri}:`, error);
-			});
-
-		// TODO: Return the content of the local file.
-		// const localFileContent = fs.readFileSync(uri.fsPath, 'utf-8');
-		return "";
-		// return "Downloading file...";
 	}
 }
