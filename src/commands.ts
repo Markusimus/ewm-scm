@@ -91,7 +91,9 @@ export class CommandCenter {
 		{
 			// Open the file in vscode for all resourceStates
 			for (const resource of resourceStates) {
-				commands.executeCommand('vscode.open', resource.resourceUri);
+				if (resource.leftUri){
+					commands.executeCommand('vscode.open', resource.leftUri);
+				}
 			}
 
 		}

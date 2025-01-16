@@ -45,7 +45,7 @@
       },
       {
         "command": "ewm-scm.open",
-        "title": "Open file",
+        "title": "Open repository file",
         "category": "EWM"
       }
       
