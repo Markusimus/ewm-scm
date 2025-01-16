@@ -1,6 +1,6 @@
 # ewm-sc README
 
-The IBM EWM version source control extension for VS Code.
+The IBM Engineering Workflow Manager (EWM) source control extension for VS Code.
 
 ## Features
 
@@ -10,6 +10,8 @@ It implements original file for Diff and quick diff.
 ## Requirements
 
 The jazz lscm needs to be installed and accesable in PATH.
+The lscm needs to be logged in to EWM using following command:
+    lscm login -r <https://repository_url> -u <username> -c
 
 ## Extension Settings
 
@@ -24,35 +26,16 @@ This extension contributes the following settings:
 
 ## Known Issues
 
-This extension is still in development.
+This extension is early stage of development.
 Many issues and unfinished functions are expected.
+The settings are not fully implemented yet.
 
 ## Release Notes
 
+### 0.0.8
+Added Checkin command for Unresolved files.
+Added Open Repository command.
 
 ### 0.0.3
 Initial development release that works in MacOS and Windows.
 
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
